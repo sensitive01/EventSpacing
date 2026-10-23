@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-bg: #faf7fb;
+    --brand-primary: #2b0d38;
+    --brand-gold: #d49b2c;
+  }
+
+  body {
+    background-color: #fbf9fc;
+    color: #1e1e24;
+    font-family: var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-playfair), Georgia, serif;
+  }
+}
+
+/* Custom scrollbar for horizontal categories and filters */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Range input accent color */
+input[type="range"] {
+  accent-color: #431050;
+}

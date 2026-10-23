@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #fbf7fd;
+  --color-brand-100: #f5eff8;
+  --color-brand-200: #ebd8f4;
+  --color-brand-300: #dbb9eb;
+  --color-brand-400: #c38fde;
+  --color-brand-500: #8e2b9f;
+  --color-brand-600: #701a82;
+  --color-brand-700: #5a136b;
+  --color-brand-800: #431050;
+  --color-brand-900: #2b0d38;
+  --color-brand-950: #1b0724;
+
+  --color-gold-50: #fdfbf6;
+  --color-gold-100: #faeed9;
+  --color-gold-200: #f5dcaf;
+  --color-gold-300: #ecc47d;
+  --color-gold-400: #e5b14f;
+  --color-gold-500: #d49b2c;
+  --color-gold-600: #be811f;
+  --color-gold-700: #98601b;
+  --color-gold-800: #7a4c1b;
+  --color-gold-900: #643f1b;
+
+  --font-serif: var(--font-playfair), Georgia, serif;
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+
+  --shadow-soft: 0 2px 15px -3px rgba(43, 13, 56, 0.07), 0 4px 6px -2px rgba(43, 13, 56, 0.03);
+  --shadow-card: 0 10px 25px -5px rgba(43, 13, 56, 0.08), 0 8px 10px -6px rgba(43, 13, 56, 0.04);
+  --shadow-hover: 0 20px 30px -10px rgba(43, 13, 56, 0.15), 0 10px 10px -5px rgba(43, 13, 56, 0.06);
+}
+
+:root {
+  --brand-bg: #faf7fb;
+  --brand-primary: #2b0d38;
+  --brand-gold: #d49b2c;
+}
+
+body {
+  background-color: #0f0714;
+  color: #f3f0f5;
+  font-family: var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+
+/* Custom scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
