@@ -17,6 +17,8 @@ import {
   X,
   Sparkles,
   ShieldAlert,
+  LogOut,
+  Lock,
 } from "lucide-react";
 import { mockApprovalQueue } from "@/data/mockAdminData";
 
@@ -48,6 +50,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
   };
+
+  // If on authentication pages, render full-screen standalone layout without sidebar
+  if (pathname === "/signin" || pathname === "/login") {
+    return <main className="min-h-screen w-full bg-[#0d0413] text-gray-100">{children}</main>;
+  }
 
   return (
     <div className="min-h-screen bg-[#0d0413] flex text-gray-100">
@@ -139,6 +146,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <span>Vendor Partner Hub</span>
             <ExternalLink className="w-3 h-3" />
           </a>
+          <div className="pt-2 border-t border-brand-900/40">
+            <Link
+              href="/signin"
+              className="flex items-center justify-between text-gray-400 hover:text-amber-400 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Lock className="w-3 h-3" />
+                <span>Lock Console / Sign Out</span>
+              </span>
+              <LogOut className="w-3 h-3" />
+            </Link>
+          </div>
         </div>
       </aside>
 
@@ -184,14 +203,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
             <div className="h-6 w-px bg-brand-900/60"></div>
 
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gold-500 to-amber-400 text-brand-950 font-bold text-xs flex items-center justify-center">
+            <Link
+              href="/signin"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              title="Click to view sign in or switch admin role"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gold-500 to-amber-400 text-brand-950 font-bold text-xs flex items-center justify-center shadow-xs">
                 SA
               </div>
               <span className="hidden sm:block text-xs font-semibold text-gray-200">
                 Super Admin
               </span>
-            </div>
+            </Link>
           </div>
         </header>
 

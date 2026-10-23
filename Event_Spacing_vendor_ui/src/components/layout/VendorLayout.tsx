@@ -20,6 +20,7 @@ import {
   Sparkles,
   ShieldCheck,
   CheckCircle2,
+  LogOut,
 } from "lucide-react";
 import { currentVendorProfile } from "@/data/mockVendorData";
 
@@ -47,6 +48,11 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
   };
+
+  // If on authentication pages, render full-screen standalone layout without sidebar
+  if (pathname === "/signin" || pathname === "/login") {
+    return <main className="min-h-screen w-full bg-[#faf7fb]">{children}</main>;
+  }
 
   return (
     <div className="min-h-screen bg-[#faf7fb] flex text-gray-900">
@@ -160,14 +166,14 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
             <span className="inline-flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Verified Vendor
             </span>
-            <a
-              href="http://localhost:3000"
-              target="_blank"
-              rel="noreferrer"
-              className="text-gold-400 hover:underline flex items-center gap-1"
+            <Link
+              href="/signin"
+              className="text-gray-400 hover:text-gold-300 flex items-center gap-1 transition-colors"
+              title="Sign in as another vendor or sign out"
             >
-              Customer Site <ExternalLink className="w-3 h-3" />
-            </a>
+              <LogOut className="w-3 h-3" />
+              <span>Sign Out</span>
+            </Link>
           </div>
         </div>
       </aside>
@@ -217,14 +223,18 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
 
             <div className="h-6 w-px bg-gray-200"></div>
 
-            <div className="flex items-center gap-2">
+            <Link
+              href="/signin"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              title="Click to view sign in or switch account"
+            >
               <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-900 font-bold text-xs flex items-center justify-center">
                 VR
               </div>
               <span className="hidden sm:block text-xs font-semibold text-gray-800">
                 Vikramaditya
               </span>
-            </div>
+            </Link>
           </div>
         </header>
 
