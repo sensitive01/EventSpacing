@@ -2,11 +2,10 @@
 
 /**
  * @file venues/page.tsx
- * @description Venue Discovery and Search Results page (Screen 2) featuring faceted filters, sorting, view toggles, and enquiry modals.
+ * @description Venue Discovery and Search Results page (Screen 2) featuring live faceted filters, sorting, view toggles, enquiry modals, and backend API integration.
  */
 
-import React, { useState, useMemo, useEffect, Suspense } from "react";
-import Image from "next/image";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -17,6 +16,7 @@ import {
   Send,
   CheckCircle2,
   SlidersHorizontal,
+  Loader2,
 } from "lucide-react";
 import { Venue, VenueFilterState } from "@/types/venue";
 import { MOCK_VENUES } from "@/data/mockVenues";
@@ -25,10 +25,10 @@ import { FilterSidebar } from "@/components/venues/FilterSidebar";
 import { SortHeader } from "@/components/venues/SortHeader";
 import { VenueCard } from "@/components/venues/VenueCard";
 import { VenueComparisonModal } from "@/components/venues/VenueComparisonModal";
-
+import { api } from "@/lib/api";
 
 /**
- * Inner venues content component reading query parameters.
+ * Inner venues content component reading query parameters and interfacing with backend API.
  *
  * @returns React JSX element
  */
@@ -63,19 +63,162 @@ function VenuesExploreContent() {
     viewMode: "grid",
   });
 
+  // Venues data state from backend
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Modal enquiry state
   const [enquiringVenue, setEnquiringVenue] = useState<Venue | null>(null);
   const [enquirySuccess, setEnquirySuccess] = useState(false);
+  const [enquiryName, setEnquiryName] = useState("");
+  const [enquiryPhone, setEnquiryPhone] = useState("");
+  const [enquiryEmail, setEnquiryEmail] = useState("");
+  const [enquiryDate, setEnquiryDate] = useState("");
+  const [enquiryGuests, setEnquiryGuests] = useState("");
+  const [isEnquiring, setIsEnquiring] = useState(false);
+  const [enquiryError, setEnquiryError] = useState("");
 
   // Mobile filters drawer state
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-
   // Venue Comparison state (up to 3 venues)
   const [comparedVenues, setComparedVenues] = useState<Venue[]>([]);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+
+  // Pre-fill user details if logged in
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("es_user");
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          if (u.name) setEnquiryName(u.name);
+          if (u.phone) setEnquiryPhone(u.phone);
+          if (u.email) setEnquiryEmail(u.email);
+        } catch {
+          // ignore parsing error
+        }
+      }
+    }
+  }, []);
+
+  // Fetch Venues from Backend API with Fallback to Mock Data
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchVenues = async () => {
+      setIsLoading(true);
+
+      const params: Record<string, any> = {
+        page: currentPage,
+        limit: 12,
+        sortBy: filters.sortBy,
+      };
+
+      if (filters.searchQuery.trim()) {
+        params.q = filters.searchQuery.trim();
+      }
+
+      if (filters.selectedCity && filters.selectedCity !== "All Cities") {
+        params.city = filters.selectedCity;
+      }
+
+      if (
+        filters.selectedLocalities.length > 0 &&
+        !filters.selectedLocalities.includes("Bengaluru")
+      ) {
+        params.locality = filters.selectedLocalities.join(",");
+      }
+
+      if (activeCategory === "FREE Venues") {
+        params.isFreeVenueOnly = true;
+      } else if (activeCategory !== "All Events") {
+        params.eventType = activeCategory;
+      } else if (filters.selectedEventTypes.length > 0) {
+        params.eventType = filters.selectedEventTypes.join(",");
+      }
+
+      if (filters.capacityRange !== "any") {
+        params.capacityRange = filters.capacityRange;
+      }
+
+      if (filters.maxPrice < 500000) {
+        params.maxPrice = filters.maxPrice;
+      }
+
+      if (filters.selectedAmenities.length > 0) {
+        params.amenities = filters.selectedAmenities.join(",");
+      }
+
+      try {
+        const res = await api.venues.getAll(params);
+        if (!isCancelled) {
+          const mapped: Venue[] = (res.data || []).map((v: any) => ({
+            ...v,
+            id: v.id || v._id,
+          }));
+          setVenues(mapped);
+          setTotalCount(res.pagination?.total ?? mapped.length);
+          setTotalPages(res.pagination?.totalPages ?? 1);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.warn("Backend API not reachable, falling back to local dataset:", error);
+        if (!isCancelled) {
+          // Apply client-side filtering on mock venues fallback
+          let list = [...MOCK_VENUES];
+
+          if (activeCategory === "FREE Venues") {
+            list = list.filter((v) => v.pricing?.hasFreeVenueOption === true);
+          } else if (activeCategory !== "All Events") {
+            list = list.filter((v) =>
+              v.eventTypes?.some((et) =>
+                et.toLowerCase().includes(activeCategory.toLowerCase())
+              )
+            );
+          }
+
+          if (filters.searchQuery.trim()) {
+            const q = filters.searchQuery.toLowerCase();
+            list = list.filter(
+              (v) =>
+                v.name.toLowerCase().includes(q) ||
+                v.location.locality.toLowerCase().includes(q) ||
+                v.shortDescription.toLowerCase().includes(q)
+            );
+          }
+
+          if (filters.selectedLocalities.length > 0 && !filters.selectedLocalities.includes("Bengaluru")) {
+            list = list.filter((v) => filters.selectedLocalities.includes(v.location.locality));
+          }
+
+          list = list.filter((v) => v.pricing.pricePerDay <= filters.maxPrice);
+
+          if (filters.sortBy === "price_low_high") {
+            list.sort((a, b) => a.pricing.pricePerDay - b.pricing.pricePerDay);
+          } else if (filters.sortBy === "price_high_low") {
+            list.sort((a, b) => b.pricing.pricePerDay - a.pricing.pricePerDay);
+          } else if (filters.sortBy === "rating_high_low") {
+            list.sort((a, b) => b.rating - a.rating);
+          }
+
+          setVenues(list);
+          setTotalCount(list.length);
+          setTotalPages(1);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchVenues();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [filters, activeCategory, currentPage]);
 
   const handleToggleCompare = (venue: Venue) => {
     setComparedVenues((prev) => {
@@ -93,8 +236,6 @@ function VenuesExploreContent() {
 
   /**
    * Updates partial filter values.
-   *
-   * @param partial - Partial filter properties to merge
    */
   const handleFilterChange = (partial: Partial<VenueFilterState>) => {
     setFilters((prev) => ({ ...prev, ...partial }));
@@ -117,101 +258,42 @@ function VenuesExploreContent() {
       viewMode: "grid",
     });
     setActiveCategory("All Events");
+    setCurrentPage(1);
   };
 
   /**
    * Handles search query submission.
-   *
-   * @param e - Form submit event
    */
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setCurrentPage(1);
   };
 
   /**
-   * Applies client-side filtering and sorting to the mock venues dataset.
+   * Submits direct customer inquiry to the backend.
    */
-  const filteredVenues = useMemo(() => {
-    let list = [...MOCK_VENUES];
+  const handleEnquiryFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enquiringVenue) return;
+    setIsEnquiring(true);
+    setEnquiryError("");
 
-    // 1. Category pill filter
-    if (activeCategory === "FREE Venues") {
-      list = list.filter((v) => v.pricing.hasFreeVenueOption === true);
-    } else if (activeCategory !== "All Events") {
-      list = list.filter((v) =>
-        v.eventTypes.some((et) =>
-          et.toLowerCase().includes(activeCategory.toLowerCase())
-        )
-      );
-    }
-
-    // 2. Keyword query
-    if (filters.searchQuery.trim()) {
-      const q = filters.searchQuery.toLowerCase();
-      list = list.filter(
-        (v) =>
-          v.name.toLowerCase().includes(q) ||
-          v.location.locality.toLowerCase().includes(q) ||
-          v.shortDescription.toLowerCase().includes(q)
-      );
-    }
-
-    // 3. Localities
-    if (
-      filters.selectedLocalities.length > 0 &&
-      !filters.selectedLocalities.includes("Bengaluru")
-    ) {
-      list = list.filter((v) =>
-        filters.selectedLocalities.includes(v.location.locality)
-      );
-    }
-
-    // 4. Event types
-    if (filters.selectedEventTypes.length > 0) {
-      list = list.filter((v) =>
-        v.eventTypes.some((et) => filters.selectedEventTypes.includes(et))
-      );
-    }
-
-    // 5. Price limit
-    list = list.filter((v) => v.pricing.pricePerDay <= filters.maxPrice);
-
-    // 6. Amenities
-    if (filters.selectedAmenities.length > 0) {
-      list = list.filter((v) =>
-        filters.selectedAmenities.every((amenity) =>
-          v.amenities.includes(amenity)
-        )
-      );
-    }
-
-    // 7. Capacity Range
-    if (filters.capacityRange !== "any") {
-      list = list.filter((v) => {
-        if (filters.capacityRange === "upto_50") return v.capacity.maxGuests <= 50;
-        if (filters.capacityRange === "51_100")
-          return v.capacity.maxGuests >= 51 && v.capacity.minGuests <= 100;
-        if (filters.capacityRange === "101_300")
-          return v.capacity.maxGuests >= 101 && v.capacity.minGuests <= 300;
-        if (filters.capacityRange === "301_500")
-          return v.capacity.maxGuests >= 301 && v.capacity.minGuests <= 500;
-        if (filters.capacityRange === "500_plus")
-          return v.capacity.maxGuests >= 500;
-        return true;
+    try {
+      const venueId = enquiringVenue.id || (enquiringVenue as any)._id;
+      await api.venues.inquire(venueId, {
+        name: enquiryName,
+        phone: enquiryPhone,
+        email: enquiryEmail || "customer@eventspacing.com",
+        eventDate: enquiryDate,
+        guestCount: enquiryGuests ? parseInt(enquiryGuests, 10) : undefined,
       });
+      setIsEnquiring(false);
+      setEnquirySuccess(true);
+    } catch (err: any) {
+      setIsEnquiring(false);
+      setEnquiryError(err.message || "Failed to submit enquiry. Please try again.");
     }
-
-    // 8. Sorting
-    if (filters.sortBy === "price_low_high") {
-      list.sort((a, b) => a.pricing.pricePerDay - b.pricing.pricePerDay);
-    } else if (filters.sortBy === "price_high_low") {
-      list.sort((a, b) => b.pricing.pricePerDay - a.pricing.pricePerDay);
-    } else if (filters.sortBy === "rating_high_low") {
-      list.sort((a, b) => b.rating - a.rating);
-    }
-
-    return list;
-  }, [filters, activeCategory]);
+  };
 
   return (
     <div className="w-full bg-[#faf7fb] min-h-screen pb-20">
@@ -244,7 +326,7 @@ function VenuesExploreContent() {
             Event Venues
           </h1>
           <p className="text-sm sm:text-base text-white/80 max-w-xl">
-            Find and book the perfect space for your special occasion.
+            Find and book the perfect space for your special occasion with verified owner pricing.
           </p>
         </div>
       </div>
@@ -254,8 +336,11 @@ function VenuesExploreContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-3 overflow-x-auto no-scrollbar flex items-center gap-2 sm:gap-3">
           {/* All Events Button */}
           <button
-            onClick={() => setActiveCategory("All Events")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            onClick={() => {
+              setActiveCategory("All Events");
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               activeCategory === "All Events"
                 ? "bg-brand-800 text-white shadow-sm"
                 : "bg-gray-100 hover:bg-gray-200 text-gray-700"
@@ -267,10 +352,11 @@ function VenuesExploreContent() {
 
           {/* Special Client Feature: FREE VENUES (with Catering Plans) */}
           <button
-            onClick={() =>
-              setActiveCategory(activeCategory === "FREE Venues" ? "All Events" : "FREE Venues")
-            }
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            onClick={() => {
+              setActiveCategory(activeCategory === "FREE Venues" ? "All Events" : "FREE Venues");
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
               activeCategory === "FREE Venues"
                 ? "bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md ring-2 ring-emerald-400"
                 : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300"
@@ -283,8 +369,11 @@ function VenuesExploreContent() {
           {EVENT_CATEGORIES.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => setActiveCategory(cat.name)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              onClick={() => {
+                setActiveCategory(cat.name);
+                setCurrentPage(1);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 activeCategory === cat.name
                   ? "bg-brand-800 text-white shadow-sm"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-700"
@@ -299,7 +388,7 @@ function VenuesExploreContent() {
       {/* 3. Main Discovery Workspace (Faceted Sidebar + Results Grid) */}
       <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Faceted Filters (Desktop Only - 3.5 cols on lg) */}
+          {/* Left Faceted Filters (Desktop Only) */}
           <div className="hidden lg:block lg:col-span-4 xl:col-span-3 sticky top-28">
             <FilterSidebar
               filters={filters}
@@ -309,12 +398,12 @@ function VenuesExploreContent() {
             />
           </div>
 
-          {/* Right Results Grid (Full width on mobile, 8.5 cols on lg) */}
+          {/* Right Results Grid */}
           <div className="lg:col-span-8 xl:col-span-9">
             {/* Mobile Filter Toggle & Quick Summary Bar */}
             <div className="lg:hidden flex items-center justify-between gap-3 mb-4 bg-white p-3 rounded-2xl border border-gray-200/90 shadow-xs">
               <div className="text-xs font-bold text-gray-800">
-                <span className="text-[#380c48] font-extrabold text-sm">{filteredVenues.length}</span> Venues Available
+                <span className="text-[#380c48] font-extrabold text-sm">{totalCount}</span> Venues Available
               </div>
               <button
                 type="button"
@@ -325,15 +414,30 @@ function VenuesExploreContent() {
                 <span>Filters</span>
               </button>
             </div>
+
             <SortHeader
               filters={filters}
-              totalCount={filteredVenues.length}
+              totalCount={totalCount}
               onFilterChange={handleFilterChange}
               onSearchSubmit={handleSearchSubmit}
             />
 
-            {/* Results Grid / List */}
-            {filteredVenues.length === 0 ? (
+            {/* Results Grid / List with Loading State */}
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white rounded-2xl border border-gray-200/80 p-4 space-y-4 animate-pulse shadow-soft"
+                  >
+                    <div className="h-48 bg-gray-200 rounded-xl w-full" />
+                    <div className="h-4 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                    <div className="h-8 bg-gray-100 rounded-xl w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : venues.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-gray-200 space-y-3">
                 <Sparkles className="w-10 h-10 text-gray-400 mx-auto" />
                 <h3 className="font-serif text-lg font-bold text-gray-800">
@@ -358,7 +462,7 @@ function VenuesExploreContent() {
                     : "space-y-4"
                 }
               >
-                {filteredVenues.map((venue) => (
+                {venues.map((venue) => (
                   <VenueCard
                     key={venue.id}
                     venue={venue}
@@ -366,6 +470,7 @@ function VenuesExploreContent() {
                     onEnquire={(v) => {
                       setEnquiringVenue(v);
                       setEnquirySuccess(false);
+                      setEnquiryError("");
                     }}
                     onToggleCompare={handleToggleCompare}
                     isCompared={comparedVenues.some((cv) => cv.id === venue.id)}
@@ -374,51 +479,45 @@ function VenuesExploreContent() {
               </div>
             )}
 
-            {/* Pagination Controls matching Screen 2 */}
-            <div className="mt-12 flex items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                aria-label="Previous Page"
-                className="w-9 h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center text-gray-600 transition-all shadow-2xs"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              {[1, 2, 3, 4, 5].map((pageNum) => (
+            {/* Dynamic Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-12 flex items-center justify-center gap-2">
                 <button
-                  key={pageNum}
                   type="button"
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`w-9 h-9 rounded-xl text-xs font-bold transition-all shadow-2xs ${
-                    currentPage === pageNum
-                      ? "bg-brand-900 text-white shadow-sm"
-                      : "border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
-                  }`}
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                  aria-label="Previous Page"
+                  className="w-9 h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center text-gray-600 transition-all shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {pageNum}
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-              ))}
 
-              <span className="px-2 text-gray-400 text-xs">...</span>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-9 h-9 rounded-xl text-xs font-bold transition-all shadow-2xs ${
+                      currentPage === pageNum
+                        ? "bg-brand-900 text-white shadow-sm"
+                        : "border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
 
-              <button
-                type="button"
-                onClick={() => setCurrentPage(125)}
-                className="w-9 h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold shadow-2xs"
-              >
-                125
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => p + 1)}
-                aria-label="Next Page"
-                className="w-9 h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center text-gray-600 transition-all shadow-2xs"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                  aria-label="Next Page"
+                  className="w-9 h-9 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center text-gray-600 transition-all shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -426,13 +525,11 @@ function VenuesExploreContent() {
       {/* Mobile Slide-Over Filter Drawer */}
       {isMobileFilterOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex justify-end">
-          {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMobileFilterOpen(false)}
           />
 
-          {/* Drawer Panel */}
           <div className="relative w-full max-w-xs sm:max-w-sm bg-white h-full overflow-y-auto p-5 shadow-2xl z-10 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
@@ -464,20 +561,20 @@ function VenuesExploreContent() {
                 onClick={() => setIsMobileFilterOpen(false)}
                 className="w-full bg-[#380c48] hover:bg-[#2b0837] text-white font-bold text-xs py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>Show {filteredVenues.length} Venues</span>
+                <span>Show {totalCount} Venues</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Enquiry Modal */}
+      {/* Enquiry Modal Connected to Backend */}
       {enquiringVenue && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative border border-gray-200">
             <button
               onClick={() => setEnquiringVenue(null)}
-              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100"
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100 cursor-pointer"
               aria-label="Close Enquiry Modal"
             >
               <X className="w-5 h-5" />
@@ -490,12 +587,12 @@ function VenuesExploreContent() {
                   Enquiry Sent to {enquiringVenue.name}!
                 </h4>
                 <p className="text-xs sm:text-sm text-gray-600">
-                  The venue manager has received your request and will contact you directly within 2 hours.
+                  The venue manager has received your booking inquiry and will contact you directly within 2 hours.
                 </p>
                 <button
                   type="button"
                   onClick={() => setEnquiringVenue(null)}
-                  className="mt-4 px-6 py-2.5 rounded-xl bg-brand-800 text-white font-semibold text-xs"
+                  className="mt-4 px-6 py-2.5 rounded-xl bg-brand-800 text-white font-semibold text-xs cursor-pointer"
                 >
                   Done
                 </button>
@@ -506,23 +603,19 @@ function VenuesExploreContent() {
                   Enquire with {enquiringVenue.name}
                 </h3>
                 <p className="text-xs text-gray-500 mb-5">
-                  Get quotes, check availability, or schedule a free venue walkthrough.
+                  Get quotes, check date availability, or request a venue walkthrough.
                 </p>
 
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setEnquirySuccess(true);
-                  }}
-                  className="space-y-3"
-                >
+                <form onSubmit={handleEnquiryFormSubmit} className="space-y-3">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Your Name *
+                      Your Full Name *
                     </label>
                     <input
                       type="text"
                       required
+                      value={enquiryName}
+                      onChange={(e) => setEnquiryName(e.target.value)}
                       placeholder="e.g. Rahul Sharma"
                       className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700"
                     />
@@ -531,11 +624,13 @@ function VenuesExploreContent() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Phone *
+                        Phone Number *
                       </label>
                       <input
                         type="tel"
                         required
+                        value={enquiryPhone}
+                        onChange={(e) => setEnquiryPhone(e.target.value)}
                         placeholder="+91 98765 43210"
                         className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700"
                       />
@@ -547,28 +642,62 @@ function VenuesExploreContent() {
                       <input
                         type="date"
                         required
+                        value={enquiryDate}
+                        onChange={(e) => setEnquiryDate(e.target.value)}
                         className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Estimated Guests
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 350"
-                      className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={enquiryEmail}
+                        onChange={(e) => setEnquiryEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Estimated Guests
+                      </label>
+                      <input
+                        type="number"
+                        value={enquiryGuests}
+                        onChange={(e) => setEnquiryGuests(e.target.value)}
+                        placeholder="e.g. 350"
+                        className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700"
+                      />
+                    </div>
                   </div>
+
+                  {enquiryError && (
+                    <div className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl">
+                      {enquiryError}
+                    </div>
+                  )}
 
                   <button
                     type="submit"
-                    className="w-full mt-2 bg-brand-800 hover:bg-brand-900 text-white font-semibold text-sm py-3 rounded-xl flex items-center justify-center gap-2 shadow-md"
+                    disabled={isEnquiring}
+                    className="w-full mt-2 bg-brand-800 hover:bg-brand-900 text-white font-semibold text-sm py-3 rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-70"
                   >
-                    <span>Submit Enquiry</span>
-                    <Send className="w-4 h-4 text-gold-400" />
+                    {isEnquiring ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sending Request...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Submit Direct Enquiry</span>
+                        <Send className="w-4 h-4 text-gold-400" />
+                      </>
+                    )}
                   </button>
                 </form>
               </div>
@@ -592,13 +721,13 @@ function VenuesExploreContent() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsCompareModalOpen(true)}
-              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-gold-500 to-amber-400 text-brand-950 font-bold text-xs shadow-md hover:from-gold-600 hover:to-amber-500 transition-all"
+              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-gold-500 to-amber-400 text-brand-950 font-bold text-xs shadow-md hover:from-gold-600 hover:to-amber-500 transition-all cursor-pointer"
             >
               Compare Now
             </button>
             <button
               onClick={() => setComparedVenues([])}
-              className="px-2.5 py-1.5 rounded-xl text-gray-400 hover:text-white text-xs hover:bg-white/10 transition-colors"
+              className="px-2.5 py-1.5 rounded-xl text-gray-400 hover:text-white text-xs hover:bg-white/10 transition-colors cursor-pointer"
             >
               Clear
             </button>
@@ -615,6 +744,7 @@ function VenuesExploreContent() {
           onEnquire={(v) => {
             setEnquiringVenue(v);
             setEnquirySuccess(false);
+            setEnquiryError("");
           }}
         />
       )}

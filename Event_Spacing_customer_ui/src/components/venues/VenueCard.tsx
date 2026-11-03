@@ -31,6 +31,7 @@ interface VenueCardProps {
  * @param onEnquire - Callback fired when clicking "Enquire"
  * @returns React JSX element
  */
+
 export const VenueCard: React.FC<VenueCardProps> = ({
   venue,
   showEnquire = false,
@@ -182,7 +183,7 @@ export const VenueCard: React.FC<VenueCardProps> = ({
           {/* Button Actions */}
           <div className={`grid gap-2 ${showEnquire ? "grid-cols-2" : "grid-cols-1"}`}>
             <Link
-              href={`/venues`}
+              href={`/venues/${venue.slug || venue.id}`}
               className="w-full bg-brand-800 hover:bg-brand-900 text-white font-semibold text-xs sm:text-sm py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm hover:shadow transition-all text-center"
             >
               <span>View Details</span>

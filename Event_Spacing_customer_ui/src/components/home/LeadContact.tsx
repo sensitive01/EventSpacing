@@ -2,11 +2,12 @@
 
 /**
  * @file LeadContact.tsx
- * @description Contact and lead inquiry section with direct contact cards and booking request form.
+ * @description Contact and lead inquiry section with direct contact cards and booking request form connected to backend API.
  */
 
-import React, { useState } from "react";
-import { Phone, MessageSquare, Mail, Send, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Phone, MessageSquare, Mail, Send, CheckCircle2, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
 
 /**
  * LeadContact component allowing users to directly submit custom event specifications.
@@ -24,7 +25,26 @@ export const LeadContact: React.FC = () => {
     message: "",
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("es_user");
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          setFormData((prev) => ({
+            ...prev,
+            name: u.name || prev.name,
+            email: u.email || prev.email,
+            phone: u.phone || prev.phone,
+          }));
+        } catch {}
+      }
+    }
+  }, []);
 
   /**
    * Updates state on form input change.
@@ -39,13 +59,31 @@ export const LeadContact: React.FC = () => {
   };
 
   /**
-   * Handles enquiry form submission.
+   * Handles enquiry form submission via backend API.
    *
    * @param e - Form submit event
    */
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitted(true);
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    try {
+      await api.inquiries.submitConcierge({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        eventType: formData.eventType,
+        eventDate: formData.eventDate,
+        guestCount: formData.guestCount ? parseInt(formData.guestCount, 10) : undefined,
+        message: formData.message,
+      });
+      setIsSubmitting(false);
+      setIsSubmitted(true);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setSubmitError(err.message || "Failed to submit inquiry. Please try again.");
+    }
   };
 
   return (
@@ -69,102 +107,85 @@ export const LeadContact: React.FC = () => {
 
             {/* Direct Contact Cards */}
             <div className="space-y-3">
-              {/* Call Tile */}
               <a
                 href="tel:+919876543210"
-                className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-200/80 shadow-soft hover:shadow-card hover:border-brand-700 transition-all group"
+                className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-200/90 shadow-2xs hover:shadow-soft hover:border-brand-300 transition-all group"
               >
-                <div className="w-12 h-12 rounded-xl bg-brand-100 text-brand-900 group-hover:bg-brand-900 group-hover:text-gold-400 flex items-center justify-center transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 group-hover:bg-brand-900 text-brand-800 group-hover:text-gold-400 flex items-center justify-center transition-colors">
                   <Phone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs uppercase font-bold text-gray-400 tracking-wider">
-                    Call Us
-                  </h4>
-                  <div className="text-sm sm:text-base font-bold text-brand-950">
-                    +91 98765 43210
-                  </div>
-                  <span className="text-[11px] text-gray-500">
-                    Mon - Sat, 9 AM - 7 PM
-                  </span>
+                  <div className="text-xs text-gray-500 font-medium">Direct Hotline</div>
+                  <div className="text-sm font-bold text-brand-950">+91 98765 43210</div>
                 </div>
               </a>
 
-              {/* WhatsApp Tile */}
               <a
                 href="https://wa.me/919876543210"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-200/80 shadow-soft hover:shadow-card hover:border-emerald-600 transition-all group"
+                className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-200/90 shadow-2xs hover:shadow-soft hover:border-emerald-300 transition-all group"
               >
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-800 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 text-emerald-700 group-hover:text-white flex items-center justify-center transition-colors">
                   <MessageSquare className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs uppercase font-bold text-gray-400 tracking-wider">
-                    WhatsApp Us
-                  </h4>
-                  <div className="text-sm sm:text-base font-bold text-brand-950">
-                    Chat with Our Team
-                  </div>
-                  <span className="text-[11px] text-gray-500">
-                    Instant 15-minute quick support
-                  </span>
+                  <div className="text-xs text-gray-500 font-medium">WhatsApp Concierge</div>
+                  <div className="text-sm font-bold text-brand-950">+91 98765 43210</div>
                 </div>
               </a>
 
-              {/* Email Tile */}
               <a
-                href="mailto:info@eventspacing.com"
-                className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-200/80 shadow-soft hover:shadow-card hover:border-brand-700 transition-all group"
+                href="mailto:concierge@eventspacing.com"
+                className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-200/90 shadow-2xs hover:shadow-soft hover:border-brand-300 transition-all group"
               >
-                <div className="w-12 h-12 rounded-xl bg-brand-100 text-brand-900 group-hover:bg-brand-900 group-hover:text-gold-400 flex items-center justify-center transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 group-hover:bg-brand-900 text-brand-800 group-hover:text-gold-400 flex items-center justify-center transition-colors">
                   <Mail className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs uppercase font-bold text-gray-400 tracking-wider">
-                    Email Us
-                  </h4>
-                  <div className="text-sm sm:text-base font-bold text-brand-950">
-                    info@eventspacing.com
-                  </div>
-                  <span className="text-[11px] text-gray-500">
-                    We&apos;ll respond within 24 hours
-                  </span>
+                  <div className="text-xs text-gray-500 font-medium">Email Desk</div>
+                  <div className="text-sm font-bold text-brand-950">concierge@eventspacing.com</div>
                 </div>
               </a>
             </div>
           </div>
 
           {/* Right Lead Inquiry Form (7 cols) */}
-          <div className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-card">
+          <div className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-soft">
             <h3 className="font-serif text-xl sm:text-2xl font-bold text-brand-950 mb-1">
-              Send an Enquiry
+              Custom Event Specification
             </h3>
             <p className="text-xs sm:text-sm text-gray-500 mb-6">
-              Tell us what you are looking for and we will provide the best curated options.
+              Share your requirements and get verified quotes from top Bangalore venues within 2 hours.
             </p>
 
             {isSubmitted ? (
-              <div className="py-12 text-center space-y-3">
-                <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
-                <h4 className="font-serif text-xl font-bold text-brand-950">
-                  Enquiry Submitted Successfully!
+              <div className="py-12 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <h4 className="font-serif text-2xl font-bold text-brand-950">
+                  Enquiry Received!
                 </h4>
                 <p className="text-sm text-gray-600 max-w-md mx-auto">
-                  Thank you for reaching out, {formData.name || "valued customer"}!
-                  Our event coordinator will contact you shortly on {formData.phone || "your provided phone"}.
+                  Thank you! Our dedicated venue specialist has received your event specification and will reach out to <strong>{formData.phone}</strong> shortly.
                 </p>
                 <button
                   type="button"
                   onClick={() => setIsSubmitted(false)}
-                  className="mt-4 px-6 py-2 rounded-xl bg-brand-800 text-white font-semibold text-xs"
+                  className="px-6 py-2.5 rounded-full border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
                 >
                   Send Another Enquiry
                 </button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                {submitError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+                    {submitError}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Name */}
                   <div>
@@ -175,7 +196,7 @@ export const LeadContact: React.FC = () => {
                       type="text"
                       name="name"
                       required
-                      placeholder="e.g. Priya Sharma"
+                      placeholder="e.g. Rahul Sharma"
                       value={formData.name}
                       onChange={handleChange}
                       className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
@@ -185,13 +206,13 @@ export const LeadContact: React.FC = () => {
                   {/* Email */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Your Email *
+                      Email Address *
                     </label>
                     <input
                       type="email"
                       name="email"
                       required
-                      placeholder="e.g. priya@example.com"
+                      placeholder="name@company.com"
                       value={formData.email}
                       onChange={handleChange}
                       className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
@@ -203,7 +224,7 @@ export const LeadContact: React.FC = () => {
                   {/* Phone */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Your Phone *
+                      Phone Number *
                     </label>
                     <input
                       type="tel"
@@ -225,7 +246,7 @@ export const LeadContact: React.FC = () => {
                       name="eventType"
                       value={formData.eventType}
                       onChange={handleChange}
-                      className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700 bg-white"
+                      className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
                     >
                       <option value="Wedding">Wedding</option>
                       <option value="Corporate Events">Corporate Event</option>
@@ -286,10 +307,20 @@ export const LeadContact: React.FC = () => {
                 {/* Submit CTA */}
                 <button
                   type="submit"
-                  className="w-full bg-brand-800 hover:bg-brand-900 text-white font-semibold text-sm py-3 px-6 rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                  disabled={isSubmitting}
+                  className="w-full bg-brand-800 hover:bg-brand-900 text-white font-semibold text-sm py-3 px-6 rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-70"
                 >
-                  <span>Submit Enquiry</span>
-                  <Send className="w-4 h-4 text-gold-400" />
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Sending to Concierge...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Submit Enquiry</span>
+                      <Send className="w-4 h-4 text-gold-400" />
+                    </>
+                  )}
                 </button>
               </form>
             )}

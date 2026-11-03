@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const inquiry_controller_1 = require("../controllers/inquiry.controller");
+const validate_middleware_1 = require("../middleware/validate.middleware");
+const inquiry_validator_1 = require("../validators/inquiry.validator");
+const router = (0, express_1.Router)();
+router.post("/concierge", (0, validate_middleware_1.validate)({ body: inquiry_validator_1.conciergeInquirySchema }), inquiry_controller_1.submitConciergeInquiry);
+router.post("/corporate", (0, validate_middleware_1.validate)({ body: inquiry_validator_1.corporateInquirySchema }), inquiry_controller_1.submitCorporateInquiry);
+exports.default = router;

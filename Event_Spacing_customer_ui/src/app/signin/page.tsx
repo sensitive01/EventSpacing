@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
+import { api } from "@/lib/api";
 
 type AuthMode = "signin" | "signup";
 type LoginMethod = "phone" | "email";
@@ -61,6 +62,7 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [authSuccess, setAuthSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [devOtpHint, setDevOtpHint] = useState("");
 
   // OTP Countdown timer
   useEffect(() => {
@@ -108,22 +110,30 @@ export default function SignInPage() {
    *
    * @param e - Form or button click event
    */
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+    setDevOtpHint("");
 
-    if (phoneNumber.replace(/\D/g, "").length < 10) {
+    const cleanPhone = phoneNumber.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
       setErrorMessage("Please enter a valid 10-digit Indian mobile number.");
       return;
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await api.auth.sendOtp(cleanPhone);
       setIsLoading(false);
       setOtpSent(true);
       setCountdown(30);
       setOtpDigits(["", "", "", "", "", ""]);
-    }, 600);
+      const code = res?.data?.devOtp || res?.devOtp || "123456";
+      setDevOtpHint(code);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMessage(err.message || "Failed to send OTP code.");
+    }
   };
 
   /**
@@ -131,7 +141,7 @@ export default function SignInPage() {
    *
    * @param e - Form submission event
    */
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const enteredCode = otpDigits.join("");
     if (enteredCode.length < 6) {
@@ -139,14 +149,24 @@ export default function SignInPage() {
       return;
     }
 
+    const cleanPhone = phoneNumber.replace(/\D/g, "");
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await api.auth.verifyOtp(cleanPhone, enteredCode, fullName || undefined);
       setIsLoading(false);
       setAuthSuccess(true);
+      if (res?.data?.token) {
+        localStorage.setItem("es_auth_token", res.data.token);
+        localStorage.setItem("es_user", JSON.stringify(res.data.user));
+        window.dispatchEvent(new Event("auth-change"));
+      }
       setTimeout(() => {
-        router.push(userRole === "partner" ? "/list-your-venue" : "/venues");
-      }, 1500);
-    }, 800);
+        window.location.href = userRole === "partner" ? "/list-your-venue" : "/venues";
+      }, 800);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMessage(err.message || "Invalid or expired OTP code.");
+    }
   };
 
   /**
@@ -154,7 +174,7 @@ export default function SignInPage() {
    *
    * @param e - Form event
    */
-  const handleEmailAuth = (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -164,13 +184,41 @@ export default function SignInPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      let res;
+      if (authMode === "signup") {
+        if (!fullName) {
+          setIsLoading(false);
+          setErrorMessage("Please enter your full name.");
+          return;
+        }
+        res = await api.auth.register({
+          name: fullName,
+          email,
+          password,
+          phone: phoneNumber.replace(/\D/g, "") || "9876543210",
+          role: userRole === "partner" ? "vendor" : "organizer",
+          companyName: companyName || undefined,
+        });
+      } else {
+        res = await api.auth.login({ email, password });
+      }
+
       setIsLoading(false);
       setAuthSuccess(true);
+      if (res?.data?.token) {
+        localStorage.setItem("es_auth_token", res.data.token);
+        localStorage.setItem("es_user", JSON.stringify(res.data.user));
+        window.dispatchEvent(new Event("auth-change"));
+      }
+
       setTimeout(() => {
-        router.push(userRole === "partner" ? "/list-your-venue" : "/venues");
-      }, 1500);
-    }, 800);
+        window.location.href = userRole === "partner" ? "/list-your-venue" : "/venues";
+      }, 800);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMessage(err.message || "Authentication failed. Please verify your credentials.");
+    }
   };
 
   /**
@@ -182,17 +230,18 @@ export default function SignInPage() {
     setUserRole(role);
     setLoginMethod("email");
     setAuthMode("signin");
+    setErrorMessage("");
     if (role === "organizer") {
-      setEmail("organizer.demo@eventspacing.com");
-      setPassword("RoyalCelebration2026!");
+      setEmail("raghav.rao@gmail.com");
+      setPassword("Password@123");
     } else {
-      setEmail("venue.manager@royalgrandeur.com");
-      setPassword("PartnerAccess2026!");
+      setEmail("admin@eventspacing.com");
+      setPassword("Admin@123");
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#fbf9fc] flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#fbf9fc] flex flex-col justify-center pt-12 pb-12 sm:pt-16 sm:pb-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 grid grid-cols-1 lg:grid-cols-12">
         {/* 1. Left Editorial Brand Showcase (Desktop only) */}
         <div className="hidden lg:flex lg:col-span-5 relative bg-gradient-to-br from-[#380c48] via-[#2a0737] to-[#1a0322] text-white p-10 flex-col justify-between overflow-hidden">
@@ -200,14 +249,14 @@ export default function SignInPage() {
           <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-80 h-80 bg-gold-500/20 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
 
-          {/* Top Brand Logo */}
-          <div className="relative z-10">
-            <div className="mb-4">
-              <Logo size="lg" />
-            </div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-gold-300 text-xs font-bold uppercase tracking-wider">
+          {/* Top Brand Showcase Badge */}
+          <div className="relative z-10 space-y-2">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-gold-300 text-xs font-bold uppercase tracking-wider shadow-inner">
               <Sparkles className="w-3.5 h-3.5 text-gold-400" />
               <span>India&apos;s Royal Venue Network</span>
+            </div>
+            <div className="text-[11px] font-semibold text-gold-200/80 tracking-widest uppercase">
+              Member &amp; Host Portal
             </div>
           </div>
 
@@ -448,6 +497,29 @@ export default function SignInPage() {
                       className="text-xs font-bold text-[#380c48] hover:underline"
                     >
                       Change
+                    </button>
+                  </div>
+
+                  {/* Dev Mode OTP Banner with Auto-Fill */}
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex items-center justify-between shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <div>
+                        <span className="font-semibold text-amber-900">Dev OTP Code: </span>
+                        <span className="font-mono font-extrabold text-sm tracking-widest text-[#380c48] ml-1 bg-white px-2 py-0.5 rounded border border-amber-300">
+                          {devOtpHint || "123456"}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = (devOtpHint || "123456").split("").slice(0, 6);
+                        setOtpDigits(code);
+                      }}
+                      className="text-xs font-bold text-[#380c48] hover:text-[#5a136b] underline cursor-pointer px-2.5 py-1 bg-white rounded-md border border-amber-200 hover:bg-amber-100 transition-colors"
+                    >
+                      Auto-fill
                     </button>
                   </div>
 

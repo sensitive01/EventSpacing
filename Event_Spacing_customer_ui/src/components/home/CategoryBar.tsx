@@ -5,7 +5,7 @@
  * @description Quick category carousel cards displaying event types with photo previews and icon buttons.
  */
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { EVENT_CATEGORIES } from "@/data/mockCategories";
+import { api } from "@/lib/api";
 
 /**
  * Renders the circular/card event category strip directly below the hero.
@@ -25,6 +26,34 @@ import { EVENT_CATEGORIES } from "@/data/mockCategories";
  * @returns React JSX element
  */
 export const CategoryBar: React.FC = () => {
+  const [categories, setCategories] = useState(EVENT_CATEGORIES);
+
+  useEffect(() => {
+    let isCancelled = false;
+    api.categories
+      .getAll()
+      .then((res: any) => {
+        const live = res?.data?.eventCategories;
+        if (!isCancelled && live && live.length > 0) {
+          const mapped = live.slice(0, 7).map((item: any, idx: number) => {
+            const fallback = EVENT_CATEGORIES[idx % EVENT_CATEGORIES.length];
+            return {
+              id: item.slug || fallback.id,
+              name: item.name,
+              imageUrl: fallback.imageUrl,
+            };
+          });
+          setCategories(mapped);
+        }
+      })
+      .catch((err) => {
+        console.warn("Categories fetch error:", err);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
   /**
    * Helper returning appropriate Lucide icon component.
    *
@@ -54,7 +83,7 @@ export const CategoryBar: React.FC = () => {
     <section className="py-8 bg-white border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-8">
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
-          {EVENT_CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <Link
               key={cat.id}
               href={`/venues?type=${encodeURIComponent(cat.name)}`}

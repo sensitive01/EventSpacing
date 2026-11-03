@@ -5,7 +5,7 @@
  * @description Dedicated Corporate Event Solutions & Venues page for Event Spacing. Tailored for enterprise event planners, HR leads, and executive assistants planning conferences, offsites, annual days, and product launches.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -31,6 +31,7 @@ import {
   Layers,
 } from "lucide-react";
 import { MOCK_VENUES } from "@/data/mockVenues";
+import { api } from "@/lib/api";
 
 /**
  * Corporate event categories catered to by Event Spacing.
@@ -157,13 +158,51 @@ export default function CorporatePage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
-  // Filter corporate-ready venues from mock data
-  const corporateVenues = MOCK_VENUES.filter((venue) =>
-    venue.eventTypes.some((et) =>
-      ["Corporate Events", "Get Together", "Presentations"].includes(et)
-    )
-  ).slice(0, 3);
+  // Live corporate venues loaded from MongoDB Atlas backend
+  const [corporateVenues, setCorporateVenues] = useState<any[]>(() =>
+    MOCK_VENUES.filter((venue) =>
+      venue.eventTypes.some((et) =>
+        ["Corporate Events", "Get Together", "Presentations"].includes(et)
+      )
+    ).slice(0, 3)
+  );
+
+  useEffect(() => {
+    let isCancelled = false;
+    api.venues
+      .getAll({ limit: 3 })
+      .then((res: any) => {
+        const liveVenues = Array.isArray(res?.data) ? res.data : (res?.data?.venues || []);
+        if (!isCancelled && liveVenues && liveVenues.length > 0) {
+          const mapped = liveVenues.map((v: any) => ({
+            id: v._id || v.id,
+            name: v.name,
+            badge: v.badge || "Verified Corporate",
+            rating: v.rating || 4.8,
+            reviewCount: v.reviewCount || 42,
+            coverImage: v.coverImage,
+            location: {
+              locality: v.location?.locality || "Bengaluru",
+              city: v.location?.city || "Bengaluru",
+            },
+            amenities: v.amenities && v.amenities.length > 0 ? v.amenities : ["High Speed WiFi", "AV Tech Support", "Catering"],
+            pricing: {
+              pricePerDay: v.rentalPricing?.standardDayRent || 75000,
+            },
+          }));
+          setCorporateVenues(mapped);
+        }
+      })
+      .catch((err) => {
+        console.warn("Corporate venues fetch error:", err);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   /**
    * Handles corporate form input changes.
@@ -182,15 +221,28 @@ export default function CorporatePage() {
    *
    * @param e - Form submission event
    */
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError("");
 
-    // Simulate API delay
-    setTimeout(() => {
+    try {
+      await api.inquiries.submitCorporate({
+        companyName: formData.companyName,
+        name: formData.contactPerson,
+        email: formData.workEmail,
+        phone: formData.phone,
+        eventType: formData.eventType,
+        eventDate: formData.targetDate || "Q4 2026",
+        guestCount: formData.estimatedGuests,
+        message: `${formData.requirements || "Corporate Event Request"} (Locality: ${formData.localityPreference})`,
+      });
       setIsSubmitting(false);
       setIsSubmitted(true);
-    }, 700);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setSubmitError(err.message || "Failed to submit corporate inquiry. Please try again.");
+    }
   };
 
   return (
@@ -455,7 +507,7 @@ export default function CorporatePage() {
                     <span>{venue.location.locality}, {venue.location.city}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-4">
-                    {venue.amenities.slice(0, 3).map((amenity) => (
+                    {venue.amenities.slice(0, 3).map((amenity: string) => (
                       <span
                         key={amenity}
                         className="text-[10px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded"
@@ -526,6 +578,11 @@ export default function CorporatePage() {
             </div>
           ) : (
             <form onSubmit={handleFormSubmit} className="space-y-4">
+              {submitError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+                  {submitError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">

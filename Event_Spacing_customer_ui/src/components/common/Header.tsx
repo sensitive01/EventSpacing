@@ -5,7 +5,7 @@
  * @description Global application header matching the exact reference layout: deep purple utility bar on top, crisp white main navbar with royal crest logo, deep purple navigation links, wishlist heart, sign in, and gold "List Your Venue" CTA.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -206,8 +206,41 @@ function NavLinks(props: NavLinksProps) {
  * @returns React JSX element
  */
 export const Header: React.FC = () => {
+  const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState("Bengaluru, Karnataka");
+  const [currentUser, setCurrentUser] = useState<{ name?: string; role?: string } | null>(null);
+
+  useEffect(() => {
+    const syncAuth = () => {
+      try {
+        const stored = localStorage.getItem("es_user");
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        } else {
+          setCurrentUser(null);
+        }
+      } catch {
+        setCurrentUser(null);
+      }
+    };
+
+    syncAuth();
+
+    window.addEventListener("auth-change", syncAuth);
+    window.addEventListener("storage", syncAuth);
+    return () => {
+      window.removeEventListener("auth-change", syncAuth);
+      window.removeEventListener("storage", syncAuth);
+    };
+  }, [pathname]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("es_auth_token");
+    localStorage.removeItem("es_user");
+    setCurrentUser(null);
+    window.location.href = "/";
+  };
 
   /**
    * Toggles the mobile navigation drawer visibility.
@@ -323,14 +356,34 @@ export const Header: React.FC = () => {
               <Heart className="w-5 h-5 stroke-[2]" />
             </Link>
 
-            {/* User Sign In */}
-            <Link
-              href="/signin"
-              className="flex items-center gap-1.5 text-[#380c48] hover:text-[#5a136b] text-sm font-semibold transition-colors"
-            >
-              <User className="w-4 h-4 stroke-[2.2]" />
-              <span>Sign In</span>
-            </Link>
+            {/* User Sign In / Profile */}
+            {currentUser ? (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/account"
+                  className="flex items-center gap-1.5 text-[#380c48] hover:text-[#5a136b] text-sm font-semibold transition-colors bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100"
+                  title="Account Settings"
+                >
+                  <User className="w-3.5 h-3.5 text-gold-600 stroke-[2.2]" />
+                  <span>{currentUser.name?.split(" ")[0] || "Account"}</span>
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="text-[11px] text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                  title="Sign Out"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/signin"
+                className="flex items-center gap-1.5 text-[#380c48] hover:text-[#5a136b] text-sm font-semibold transition-colors"
+              >
+                <User className="w-4 h-4 stroke-[2.2]" />
+                <span>Sign In</span>
+              </Link>
+            )}
 
             {/* Gold CTA "List Your Venue" */}
             <Link
@@ -373,14 +426,36 @@ export const Header: React.FC = () => {
               <NavLinks isMobile onLinkClick={() => setIsMobileMenuOpen(false)} />
 
               <div className="pt-2 border-t border-gray-100 px-3">
-                <Link
-                  href="/signin"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex items-center gap-2 text-sm font-bold text-[#380c48] py-1.5"
-                >
-                  <User className="w-4 h-4" />
-                  <span>Sign In / Register</span>
-                </Link>
+                {currentUser ? (
+                  <div className="flex items-center justify-between py-1.5">
+                    <Link
+                      href="/account"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex items-center gap-2 text-sm font-bold text-[#380c48]"
+                    >
+                      <User className="w-4 h-4 text-gold-600" />
+                      <span>{currentUser.name || "My Account"}</span>
+                    </Link>
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="text-xs text-red-600 font-semibold cursor-pointer"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href="/signin"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-2 text-sm font-bold text-[#380c48] py-1.5"
+                  >
+                    <User className="w-4 h-4" />
+                    <span>Sign In / Register</span>
+                  </Link>
+                )}
               </div>
 
               <div className="pt-2 border-t border-gray-100 flex items-center justify-between px-3 text-xs text-gray-600">

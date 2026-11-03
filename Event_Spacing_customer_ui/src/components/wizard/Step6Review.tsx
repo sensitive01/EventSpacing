@@ -21,7 +21,9 @@ import {
   Camera,
   Check,
 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useVenueWizard } from "@/context/VenueWizardContext";
+import { api } from "@/lib/api";
 
 /**
  * Step 6: Review & Submit component matching Step 6 screenshot.
@@ -33,13 +35,15 @@ export const Step6Review: React.FC = () => {
   const { step1, step2, step3, step4, step5, step6 } = state;
 
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   /**
    * Finalizes submission after validating declaration checkboxes.
    *
    * @param e - Form submit event
    */
-  const handleFinalSubmit = (e: React.FormEvent) => {
+  const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !step6.isInformationAccurate ||
@@ -49,8 +53,43 @@ export const Step6Review: React.FC = () => {
       alert("Please accept all terms and verification declarations before submitting.");
       return;
     }
-    updateStep6({ submissionStatus: "submitted" });
-    setIsSuccessModalOpen(true);
+
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    try {
+      const coverPhoto = step5.photos?.find((p) => p.isCover)?.url || step5.photos?.[0]?.url || "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=800&q=80";
+      const gallery = (step5.photos || []).map((p) => p.url);
+
+      await api.venues.onboard({
+        venueName: step1.venueName,
+        businessName: step1.businessName,
+        venueType: step1.venueType,
+        eventCategories: step1.eventCategories,
+        shortDescription: step1.shortDescription,
+        detailedDescription: step1.detailedDescription,
+        city: step2.city,
+        locality: step2.addressLine2 || step2.city || "Bengaluru",
+        addressLine1: step2.addressLine1,
+        phoneNumber: step2.phoneNumber,
+        emailAddress: step2.emailAddress,
+        seatingCapacity: step3.seatingCapacity,
+        totalCapacity: step3.totalCapacity,
+        floatingCapacity: step3.floatingCapacity,
+        numberOfHalls: step3.numberOfHalls,
+        selectedAmenities: step3.selectedAmenities,
+        pricePerDay: step4.startingPrice || 75000,
+        coverImage: coverPhoto,
+        galleryImages: gallery,
+      });
+
+      updateStep6({ submissionStatus: "submitted" });
+      setIsSubmitting(false);
+      setIsSuccessModalOpen(true);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setSubmitError(err.message || "Failed to submit venue onboarding application.");
+    }
   };
 
   return (
