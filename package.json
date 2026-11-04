@@ -1,0 +1,18 @@
+{
+  "name": "event-spacing-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Event Spacing Multi-Portal Platform (Customer, Vendor, Admin, Backend)",
+  "scripts": {
+    "build": "npm run build:customer && npm run build:vendor && npm run build:admin && npm run build:backend",
+    "build:all": "npm run build:customer && npm run build:vendor && npm run build:admin && npm run build:backend",
+    "build:customer": "npm --prefix Event_Spacing_customer_ui run build",
+    "build:vendor": "npm --prefix Event_Spacing_vendor_ui run build",
+    "build:admin": "npm --prefix Event_Spacing_admin_ui run build",
+    "build:backend": "npm --prefix Event_Spacing_backend run build",
+    "start:customer": "npm --prefix Event_Spacing_customer_ui start",
+    "start:vendor": "npm --prefix Event_Spacing_vendor_ui start",
+    "start:admin": "npm --prefix Event_Spacing_admin_ui start",
+    "start:backend": "npm --prefix Event_Spacing_backend start"
+  }
+}
