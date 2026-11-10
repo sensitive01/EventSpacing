@@ -12,13 +12,15 @@ import {
   AlertCircle,
   FileText,
   ShieldCheck,
+  Receipt,
 } from "lucide-react";
-import { mockPayouts as initialPayouts, currentVendorProfile } from "@/data/mockVendorData";
+import { currentVendorProfile } from "@/data/mockVendorData";
 import { api } from "@/lib/api";
 
 export default function VendorPayoutsPage() {
-  const [payouts, setPayouts] = useState<any[]>(initialPayouts);
+  const [payouts, setPayouts] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(currentVendorProfile);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -30,15 +32,22 @@ export default function VendorPayoutsPage() {
         ]);
 
         if (isMounted) {
-          if (payoutsRes.status === "fulfilled" && payoutsRes.value?.data?.length > 0) {
+          if (payoutsRes.status === "fulfilled" && Array.isArray(payoutsRes.value?.data)) {
             setPayouts(payoutsRes.value.data);
+          } else {
+            setPayouts([]);
           }
           if (profileRes.status === "fulfilled" && profileRes.value?.data) {
             setProfile(profileRes.value.data);
           }
+          setIsLoading(false);
         }
       } catch (err) {
-        console.warn("Could not load backend payouts, using fallback:", err);
+        console.warn("Could not load backend payouts:", err);
+        if (isMounted) {
+          setPayouts([]);
+          setIsLoading(false);
+        }
       }
     };
 
@@ -52,9 +61,9 @@ export default function VendorPayoutsPage() {
   const totalCommission = payouts.reduce((acc, p) => acc + (p.platformFeeAmount || 0), 0);
   const totalNet = payouts.reduce((acc, p) => acc + (p.netPayout || 0), 0);
 
-  const bankName = profile?.bankDetails?.bankName || currentVendorProfile.bankDetails.bankName;
-  const accountNumber = profile?.bankDetails?.accountNumber || currentVendorProfile.bankDetails.accountNumber;
-  const ifscCode = profile?.bankDetails?.ifscCode || currentVendorProfile.bankDetails.ifscCode;
+  const bankName = profile?.bankDetails?.bankName || "Bank Account Pending Setup";
+  const accountNumber = profile?.bankDetails?.accountNumber || "Not Linked";
+  const ifscCode = profile?.bankDetails?.ifscCode || "N/A";
 
   return (
     <div className="space-y-8">
@@ -62,7 +71,7 @@ export default function VendorPayoutsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-xs uppercase font-bold text-gold-600 tracking-wider">Financial Overview</span>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-gray-900">Payouts & Settlement Ledger</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-gray-900">Payouts &amp; Settlement Ledger</h1>
           <p className="text-xs sm:text-sm text-gray-500">
             Automated direct bank disbursements for verified venue bookings and security deposits.
           </p>
@@ -76,9 +85,11 @@ export default function VendorPayoutsPage() {
           <div className="text-xs">
             <div className="flex items-center gap-1">
               <span className="font-bold text-gray-900">{bankName}</span>
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              {profile?.bankDetails?.accountNumber && <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />}
             </div>
-            <span className="text-gray-500">A/C: •••• {accountNumber.slice(-4)} (IFSC: {ifscCode})</span>
+            <span className="text-gray-500">
+              A/C: {accountNumber === "Not Linked" ? "Not Linked" : `•••• ${accountNumber.slice(-4)}`} (IFSC: {ifscCode})
+            </span>
           </div>
         </div>
       </div>
@@ -94,22 +105,22 @@ export default function VendorPayoutsPage() {
         <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Platform Commission (10%)</span>
           <div className="text-2xl font-bold text-brand-900 mt-2">₹{totalCommission.toLocaleString()}</div>
-          <p className="text-[11px] text-gray-500 mt-1">Transparent 10% marketing & payment fee</p>
+          <p className="text-[11px] text-gray-500 mt-1">Transparent 10% marketing &amp; payment fee</p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Net Disbursed</span>
-          <div className="text-2xl font-bold text-emerald-700 mt-2">₹{(288000).toLocaleString()}</div>
+          <div className="text-2xl font-bold text-emerald-700 mt-2">₹{totalNet.toLocaleString()}</div>
           <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Credited to HDFC account
+            <CheckCircle2 className="w-3.5 h-3.5" /> Direct NEFT credit
           </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Upcoming Settlement</span>
-          <div className="text-2xl font-bold text-gold-700 mt-2">₹{(274500).toLocaleString()}</div>
-          <p className="text-[11px] text-gold-700 font-semibold mt-1 flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" /> Scheduled for Oct 26, 2026
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pending Settlements</span>
+          <div className="text-2xl font-bold text-gold-700 mt-2">₹0</div>
+          <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> Processed within 48h of event
           </p>
         </div>
       </div>
@@ -122,13 +133,15 @@ export default function VendorPayoutsPage() {
             <p className="text-xs text-gray-500">Every booking payout itemized with bank transaction references</p>
           </div>
 
-          <button
-            onClick={() => alert("Simulating GST statement download for financial year 2026-27.")}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold shadow-2xs transition-colors self-start sm:self-auto"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Statement (CSV)</span>
-          </button>
+          {payouts.length > 0 && (
+            <button
+              onClick={() => alert("Exporting statement for current financial period.")}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold shadow-2xs transition-colors self-start sm:self-auto"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Statement (CSV)</span>
+            </button>
+          )}
         </div>
 
         {/* Responsive Table */}
@@ -138,7 +151,7 @@ export default function VendorPayoutsPage() {
               <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50/50">
                 <th className="py-3 px-4 rounded-l-xl">Payout Ref</th>
                 <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Booking & Venue</th>
+                <th className="py-3 px-4">Booking &amp; Venue</th>
                 <th className="py-3 px-4 text-right">Gross</th>
                 <th className="py-3 px-4 text-right">Platform Fee</th>
                 <th className="py-3 px-4 text-right">Net Payout</th>
@@ -147,61 +160,73 @@ export default function VendorPayoutsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs">
-              {payouts.map((p: any) => {
-                const isPaid = p.status === "paid";
-                const isProcessing = p.status === "processing";
+              {payouts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-gray-500">
+                    <Receipt className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="font-semibold text-gray-700">No payout transactions recorded yet</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Completed booking settlements and advance payouts will be logged here automatically.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                payouts.map((p: any) => {
+                  const isPaid = p.status === "paid";
+                  const isProcessing = p.status === "processing";
 
-                return (
-                  <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="py-4 px-4 font-mono font-bold text-brand-950">
-                      {p.id}
-                      {p.payoutReference && (
-                        <span className="block text-[10px] font-normal text-gray-400 font-sans">
-                          {p.payoutReference}
+                  return (
+                    <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
+                      <td className="py-4 px-4 font-mono font-bold text-brand-950">
+                        {p.id}
+                        {p.payoutReference && (
+                          <span className="block text-[10px] font-normal text-gray-400 font-sans">
+                            {p.payoutReference}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-gray-600 whitespace-nowrap">{p.transactionDate}</td>
+                      <td className="py-4 px-4">
+                        <span className="font-semibold text-gray-900 block">{p.customerName}</span>
+                        <span className="text-[11px] text-gray-500">
+                          {p.venueName} • <span className="font-mono text-gray-400">{p.bookingId}</span>
                         </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-4 text-gray-600 whitespace-nowrap">{p.transactionDate}</td>
-                    <td className="py-4 px-4">
-                      <span className="font-semibold text-gray-900 block">{p.customerName}</span>
-                      <span className="text-[11px] text-gray-500">
-                        {p.venueName} • <span className="font-mono text-gray-400">{p.bookingId}</span>
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right font-medium text-gray-700">
-                      ₹{p.grossAmount.toLocaleString()}
-                    </td>
-                    <td className="py-4 px-4 text-right text-red-600 font-medium">
-                      -₹{p.platformFeeAmount.toLocaleString()}
-                    </td>
-                    <td className="py-4 px-4 text-right font-bold text-emerald-700 text-sm">
-                      ₹{p.netPayout.toLocaleString()}
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          isPaid
-                            ? "bg-emerald-100 text-emerald-800"
-                            : isProcessing
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <button
-                        onClick={() => alert(`Downloading tax invoice for ${p.id}`)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-brand-900 hover:bg-gray-100"
-                        title="Download Tax Invoice PDF"
-                      >
-                        <FileText className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                      <td className="py-4 px-4 text-right font-medium text-gray-700">
+                        ₹{p.grossAmount.toLocaleString()}
+                      </td>
+                      <td className="py-4 px-4 text-right text-red-600 font-medium">
+                        -₹{p.platformFeeAmount.toLocaleString()}
+                      </td>
+                      <td className="py-4 px-4 text-right font-bold text-emerald-700 text-sm">
+                        ₹{p.netPayout.toLocaleString()}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            isPaid
+                              ? "bg-emerald-100 text-emerald-800"
+                              : isProcessing
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <button
+                          onClick={() => alert(`Downloading tax invoice for ${p.id}`)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-900 hover:bg-gray-100"
+                          title="Download Tax Invoice PDF"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

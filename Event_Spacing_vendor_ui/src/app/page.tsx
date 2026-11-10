@@ -17,27 +17,23 @@ import {
   Eye,
   CheckCircle2,
   Sparkles,
+  ArrowRight,
+  Inbox,
 } from "lucide-react";
-import {
-  vendorVenuesList as fallbackVenues,
-  vendorLeadsList as fallbackLeads,
-  currentVendorProfile,
-  mockCalendarDates,
-} from "@/data/mockVendorData";
 import { api } from "@/lib/api";
 
 export default function VendorDashboardPage() {
-  const [venues, setVenues] = useState<any[]>(fallbackVenues);
-  const [leads, setLeads] = useState<any[]>(fallbackLeads);
+  const [venues, setVenues] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
   const [stats, setStats] = useState({
-    totalVenues: 3,
-    activeVenues: 2,
-    totalLeads: 42,
-    newLeads: 3,
-    monthlyEarnings: 825000,
-    bookingConversionRate: "28.5%",
+    totalVenues: 0,
+    activeVenues: 0,
+    totalLeads: 0,
+    newLeads: 0,
+    monthlyEarnings: 0,
+    bookingConversionRate: "0%",
   });
-  const [ownerName, setOwnerName] = useState(currentVendorProfile.ownerName);
+  const [ownerName, setOwnerName] = useState("Partner");
   const [isLoading, setIsLoading] = useState(true);
 
   // Load live data from backend API
@@ -64,16 +60,16 @@ export default function VendorDashboardPage() {
           if (statsRes.status === "fulfilled" && statsRes.value?.data) {
             setStats(statsRes.value.data);
           }
-          if (venuesRes.status === "fulfilled" && venuesRes.value?.data) {
+          if (venuesRes.status === "fulfilled" && Array.isArray(venuesRes.value?.data)) {
             setVenues(venuesRes.value.data);
           }
-          if (leadsRes.status === "fulfilled" && leadsRes.value?.data) {
+          if (leadsRes.status === "fulfilled" && Array.isArray(leadsRes.value?.data)) {
             setLeads(leadsRes.value.data);
           }
           setIsLoading(false);
         }
       } catch (err) {
-        console.warn("Could not fetch live dashboard stats, using local fallback:", err);
+        console.warn("Could not fetch live dashboard stats:", err);
         if (isMounted) setIsLoading(false);
       }
     };
@@ -95,13 +91,21 @@ export default function VendorDashboardPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/20 border border-gold-400/40 text-gold-300 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Partner Performance Hub &bull; MongoDB Atlas Live</span>
+              <span>Partner Performance Hub &bull; Live Account</span>
             </div>
             <h1 className="font-serif text-2xl sm:text-4xl font-bold tracking-tight">
               Welcome back, {ownerName}
             </h1>
             <p className="text-xs sm:text-sm text-gray-300 max-w-xl">
-              You have <strong className="text-gold-300">{stats.newLeads} new inquiries</strong> today for upcoming wedding dates. Keep your calendar dates updated to increase booking conversion.
+              {venues.length === 0 ? (
+                <span>
+                  Welcome to Event Spacing! Get started by listing your first banquet hall or event space to start receiving high-intent wedding and corporate inquiries.
+                </span>
+              ) : (
+                <span>
+                  You have <strong className="text-gold-300">{stats.newLeads} new inquiries</strong> today for upcoming wedding dates. Keep your calendar dates updated to maximize booking conversion.
+                </span>
+              )}
             </p>
           </div>
 
@@ -111,7 +115,7 @@ export default function VendorDashboardPage() {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-gold-500 to-amber-500 hover:from-gold-600 hover:to-amber-600 text-brand-950 font-bold text-xs shadow-lg transition-all"
             >
               <PlusCircle className="w-4 h-4 text-brand-950" />
-              <span>Add Another Venue</span>
+              <span>{venues.length === 0 ? "Add Your First Venue" : "Add Another Venue"}</span>
             </Link>
             <Link
               href="/calendar"
@@ -139,7 +143,7 @@ export default function VendorDashboardPage() {
                 Verification in Progress: &ldquo;{underReviewVenue.name}&rdquo;
               </p>
               <p className="text-[11px] text-amber-700">
-                Submitted recently. Our admin operations team is verifying the floor plans and municipal NOC documents.
+                Submitted recently. Our admin operations team is verifying floor plans and document compliance.
               </p>
             </div>
           </div>
@@ -163,8 +167,14 @@ export default function VendorDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-gray-900">{activeVenues.length}</div>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> 100% active operational capacity
+            <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
+              {activeVenues.length > 0 ? (
+                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> 100% active capacity
+                </span>
+              ) : (
+                "Ready to list your first space"
+              )}
             </p>
           </div>
         </div>
@@ -178,8 +188,14 @@ export default function VendorDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-gray-900">{stats.totalLeads}</div>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5" /> +24% vs last month
+            <p className="text-[11px] text-gray-500 font-medium mt-1">
+              {stats.totalLeads > 0 ? (
+                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5" /> Verified customer leads
+                </span>
+              ) : (
+                "Customer inquiries will appear here"
+              )}
             </p>
           </div>
         </div>
@@ -192,9 +208,11 @@ export default function VendorDashboardPage() {
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-bold text-gray-900">18</div>
+            <div className="text-2xl font-bold text-gray-900">
+              {venues.length === 0 ? 0 : Math.round(stats.totalLeads * 0.25)}
+            </div>
             <p className="text-[11px] text-gray-500 font-medium mt-1">
-              Avg conversion: <strong className="text-brand-900">{stats.bookingConversionRate || "68%"}</strong>
+              Avg conversion: <strong className="text-brand-900">{stats.bookingConversionRate || "0%"}</strong>
             </p>
           </div>
         </div>
@@ -207,9 +225,15 @@ export default function VendorDashboardPage() {
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-bold text-gray-900">₹{stats.monthlyEarnings.toLocaleString("en-IN")}</div>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5" /> Next payout in 3 days
+            <div className="text-2xl font-bold text-gray-900">₹{(stats.monthlyEarnings || 0).toLocaleString("en-IN")}</div>
+            <p className="text-[11px] text-gray-500 font-medium mt-1">
+              {stats.monthlyEarnings > 0 ? (
+                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                  <ArrowUpRight className="w-3.5 h-3.5" /> Next payout in 3 days
+                </span>
+              ) : (
+                "Settlements logged per event"
+              )}
             </p>
           </div>
         </div>
@@ -224,70 +248,96 @@ export default function VendorDashboardPage() {
               <h2 className="font-serif text-lg font-bold text-gray-900">Recent Customer Inquiries</h2>
               <p className="text-xs text-gray-500">Live requests from customer portal</p>
             </div>
-            <Link
-              href="/leads"
-              className="text-xs font-bold text-brand-800 hover:text-brand-950 flex items-center gap-1"
-            >
-              View All ({leads.length}) &rarr;
-            </Link>
+            {leads.length > 0 && (
+              <Link
+                href="/leads"
+                className="text-xs font-bold text-brand-800 hover:text-brand-950 flex items-center gap-1"
+              >
+                View All ({leads.length}) &rarr;
+              </Link>
+            )}
           </div>
 
-          <div className="divide-y divide-gray-100">
-            {leads.slice(0, 4).map((lead: any) => {
-              const statusColorsMap: Record<string, string> = {
-                new: "bg-emerald-100 text-emerald-800 border-emerald-200",
-                contacted: "bg-blue-100 text-blue-800 border-blue-200",
-                visited: "bg-purple-100 text-purple-800 border-purple-200",
-                booked: "bg-gold-100 text-gold-900 border-gold-300 font-bold",
-                declined: "bg-gray-100 text-gray-600 border-gray-200",
-              };
-              const statusColors = statusColorsMap[lead.status as string] || "bg-gray-100 text-gray-700 border-gray-200";
+          {leads.length === 0 ? (
+            /* Empty Inquiries State */
+            <div className="p-10 rounded-2xl bg-gray-50 border border-dashed border-gray-200 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-900 flex items-center justify-center mx-auto">
+                <Inbox className="w-6 h-6 text-brand-800" />
+              </div>
+              <div className="max-w-sm mx-auto">
+                <h3 className="font-bold text-sm text-gray-800">No customer inquiries yet</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Once your venue listing is active, inquiries and quote requests submitted by customers will be delivered here instantly.
+                </p>
+              </div>
+              {venues.length === 0 && (
+                <Link
+                  href="/venues/new"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-900 hover:bg-brand-950 text-white text-xs font-bold shadow-xs transition-colors"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 text-gold-400" />
+                  <span>List Your First Venue</span>
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {leads.slice(0, 4).map((lead: any) => {
+                const statusColorsMap: Record<string, string> = {
+                  new: "bg-emerald-100 text-emerald-800 border-emerald-200",
+                  contacted: "bg-blue-100 text-blue-800 border-blue-200",
+                  visited: "bg-purple-100 text-purple-800 border-purple-200",
+                  booked: "bg-gold-100 text-gold-900 border-gold-300 font-bold",
+                  declined: "bg-gray-100 text-gray-600 border-gray-200",
+                };
+                const statusColors = statusColorsMap[lead.status as string] || "bg-gray-100 text-gray-700 border-gray-200";
 
-              return (
-                <div key={lead.id || lead._id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-gray-900">{lead.customerName}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColors} uppercase`}>
-                        {lead.status}
-                      </span>
+                return (
+                  <div key={lead.id || lead._id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-gray-900">{lead.customerName}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColors} uppercase`}>
+                          {lead.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 flex flex-wrap items-center gap-x-4 gap-y-1">
+                        <span>🏛️ {lead.venueName}</span>
+                        <span>📅 {lead.eventDate} ({lead.eventType})</span>
+                        <span>👥 {lead.guestCount} Guests</span>
+                        <span>💰 Budget: {lead.budget}</span>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 flex flex-wrap items-center gap-x-4 gap-y-1">
-                      <span>🏛️ {lead.venueName}</span>
-                      <span>📅 {lead.eventDate} ({lead.eventType})</span>
-                      <span>👥 {lead.guestCount} Guests</span>
-                      <span>💰 Budget: {lead.budget}</span>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <a
+                        href={`tel:${lead.customerPhone}`}
+                        className="p-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                        title="Call customer"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                      </a>
+                      <a
+                        href={`https://wa.me/${(lead.customerPhone || "").replace(/[^0-9]/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        title="WhatsApp customer"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                      </a>
+                      <Link
+                        href="/leads"
+                        className="px-3 py-1.5 rounded-xl bg-brand-900 hover:bg-brand-950 text-white text-xs font-semibold transition-colors"
+                      >
+                        Details
+                      </Link>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <a
-                      href={`tel:${lead.customerPhone}`}
-                      className="p-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
-                      title="Call customer"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                    </a>
-                    <a
-                      href={`https://wa.me/${(lead.customerPhone || "").replace(/[^0-9]/g, "")}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                      title="WhatsApp customer"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                    </a>
-                    <Link
-                      href="/leads"
-                      className="px-3 py-1.5 rounded-xl bg-brand-900 hover:bg-brand-950 text-white text-xs font-semibold transition-colors"
-                    >
-                      Details
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right 4 Cols: Upcoming Booked Dates Preview */}
@@ -302,30 +352,33 @@ export default function VendorDashboardPage() {
             </Link>
           </div>
 
-          <div className="space-y-3">
-            {mockCalendarDates
-              .filter((d) => d.status === "booked")
-              .slice(0, 4)
-              .map((b) => (
-                <div key={b.date} className="p-3.5 rounded-2xl bg-brand-50/60 border border-brand-100 flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-brand-900 text-white flex flex-col items-center justify-center shrink-0">
-                    <span className="text-[10px] uppercase font-bold leading-none text-gold-400">
-                      {new Date(b.date).toLocaleDateString("en-US", { month: "short" })}
-                    </span>
-                    <span className="text-sm font-bold leading-none mt-0.5">
-                      {new Date(b.date).getDate()}
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-gray-900 truncate">{b.bookedBy}</p>
-                    <p className="text-[11px] text-gray-500 flex items-center justify-between mt-0.5">
-                      <span>Booking #{b.bookingRef}</span>
-                      <span className="text-emerald-700 font-semibold">Confirmed</span>
-                    </p>
-                  </div>
+          {venues.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-gray-50 border border-dashed border-gray-200 text-center space-y-2">
+              <Calendar className="w-8 h-8 text-gray-400 mx-auto" />
+              <p className="text-xs font-semibold text-gray-700">No bookings scheduled</p>
+              <p className="text-[11px] text-gray-500">Publish your venue to begin receiving reservation dates.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-4 rounded-2xl bg-brand-50/60 border border-brand-100 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-900 text-white flex flex-col items-center justify-center shrink-0">
+                  <span className="text-[10px] uppercase font-bold leading-none text-gold-400">
+                    Nov
+                  </span>
+                  <span className="text-sm font-bold leading-none mt-0.5">
+                    28
+                  </span>
                 </div>
-              ))}
-          </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-gray-900 truncate">Pending Site Inspections</p>
+                  <p className="text-[11px] text-gray-500 flex items-center justify-between mt-0.5">
+                    <span>Wedding Season Slots</span>
+                    <span className="text-emerald-700 font-semibold">Open</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="pt-2 border-t border-gray-100">
             <Link

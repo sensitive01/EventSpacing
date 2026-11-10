@@ -168,12 +168,16 @@ export const getFeaturedVenues = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const venues = await Venue.find({
+    let venues = await Venue.find({
       isActive: true,
-      badge: { $in: ["Popular", "Featured", "Free Venue Plan", "Premium"] },
+      badge: { $in: ["Popular", "Featured", "Free Venue Plan", "Premium", "New", "Live"] },
     })
-      .sort({ rating: -1, reviewCount: -1 })
+      .sort({ rating: -1, createdAt: -1 })
       .limit(6);
+
+    if (venues.length === 0) {
+      venues = await Venue.find({ isActive: true }).sort({ createdAt: -1 }).limit(6);
+    }
 
     res.status(200).json({
       success: true,

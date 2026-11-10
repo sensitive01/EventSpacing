@@ -7,8 +7,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
-import { MOCK_VENUES } from "@/data/mockVenues";
+import { ArrowRight, Sparkles, Building2 } from "lucide-react";
 import { VenueCard } from "@/components/venues/VenueCard";
 import { Venue } from "@/types/venue";
 import { api } from "@/lib/api";
@@ -28,7 +27,7 @@ export const FeaturedVenues: React.FC = () => {
     const loadFeatured = async () => {
       try {
         const res = await api.venues.getFeatured();
-        if (!isCancelled && res.data && res.data.length > 0) {
+        if (!isCancelled && res?.data && Array.isArray(res.data)) {
           const mapped = res.data.map((v: any) => ({
             ...v,
             id: v.id || v._id,
@@ -38,11 +37,11 @@ export const FeaturedVenues: React.FC = () => {
           return;
         }
       } catch (err) {
-        console.warn("Featured venues backend fetch error, falling back to mock:", err);
+        console.warn("Featured venues backend fetch error:", err);
       }
 
       if (!isCancelled) {
-        setFeaturedList(MOCK_VENUES.slice(0, 4));
+        setFeaturedList([]);
         setIsLoading(false);
       }
     };
@@ -68,7 +67,7 @@ export const FeaturedVenues: React.FC = () => {
               Top Venues for Your Next Event
             </h2>
             <p className="text-sm sm:text-base text-gray-600 mt-1.5">
-              Explore handpicked venues for weddings, corporate meetings, parties and more.
+              Explore verified venues for weddings, corporate meetings, parties, and celebrations.
             </p>
           </div>
 
@@ -81,7 +80,7 @@ export const FeaturedVenues: React.FC = () => {
           </Link>
         </div>
 
-        {/* 4-Card Responsive Grid */}
+        {/* 4-Card Responsive Grid or Clean Empty State */}
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
@@ -95,6 +94,31 @@ export const FeaturedVenues: React.FC = () => {
                 <div className="h-8 bg-gray-100 rounded-xl w-full" />
               </div>
             ))}
+          </div>
+        ) : featuredList.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-gray-200/80 p-8 sm:p-12 text-center max-w-2xl mx-auto shadow-soft space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-gold-50 border border-gold-200 text-gold-700 flex items-center justify-center mx-auto">
+              <Building2 className="w-8 h-8 text-gold-600" />
+            </div>
+            <div>
+              <h3 className="font-serif text-xl sm:text-2xl font-bold text-brand-950">
+                New Verified Venues Joining Soon
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-md mx-auto">
+                Are you a banquet hall, lawn, or convention resort owner? List your property on Event Spacing to showcase it to event planners across Bengaluru.
+              </p>
+            </div>
+            <div className="pt-2">
+              <a
+                href="http://localhost:3001/venues/new"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-brand-900 hover:bg-brand-950 text-white font-semibold text-xs transition-colors shadow-sm"
+              >
+                <span>List Your Venue on Partner Hub</span>
+                <ArrowRight className="w-4 h-4 text-gold-400" />
+              </a>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

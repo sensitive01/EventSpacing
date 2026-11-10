@@ -5,8 +5,11 @@
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from "axios";
 
-const API_BASE_URL =
+const rawUrl =
   process.env.NEXT_PUBLIC_API_URL || "https://eventspacing.onrender.com/api";
+const API_BASE_URL = rawUrl.endsWith("/api")
+  ? rawUrl
+  : `${rawUrl.replace(/\/$/, "")}/api`;
 
 /**
  * Configure dedicated Axios instance for Vendor Portal
@@ -29,6 +32,26 @@ httpClient.interceptors.request.use(
       const token = localStorage.getItem("es_vendor_token");
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+
+      // Attach client-side vendor identity headers for seamless multi-tenant isolation fallback
+      const storedUser = localStorage.getItem("es_vendor_user");
+      if (storedUser && config.headers) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.id || parsed._id) {
+            config.headers["x-vendor-id"] = parsed.id || parsed._id;
+          }
+          if (parsed.phone) {
+            config.headers["x-vendor-phone"] = parsed.phone;
+          }
+          if (parsed.email) {
+            config.headers["x-vendor-email"] = parsed.email;
+          }
+          if (parsed.name) {
+            config.headers["x-vendor-name"] = parsed.name;
+          }
+        } catch {}
       }
     }
     return config;
@@ -101,14 +124,40 @@ export const api = {
 
   // Vendor Portal Management Endpoints
   vendor: {
-    getStats: (): Promise<any> => httpClient.get("/vendor-portal/stats"),
+    getStats: (params?: Record<string, any>): Promise<any> => {
+      let extraParams: Record<string, any> = {};
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("es_vendor_user");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.phone) extraParams.phone = parsed.phone;
+            if (parsed.name) extraParams.name = parsed.name;
+          }
+        } catch {}
+      }
+      return httpClient.get("/vendor-portal/stats", { params: { ...extraParams, ...params } });
+    },
 
     getProfile: (): Promise<any> => httpClient.get("/vendor-portal/profile"),
 
     updateProfile: (data: any): Promise<any> => httpClient.put("/vendor-portal/profile", data),
 
-    getVenues: (params?: Record<string, any>): Promise<any> =>
-      httpClient.get("/vendor-portal/venues", { params }),
+    getVenues: (params?: Record<string, any>): Promise<any> => {
+      let extraParams: Record<string, any> = {};
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("es_vendor_user");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.phone) extraParams.phone = parsed.phone;
+            if (parsed.name) extraParams.name = parsed.name;
+            if (parsed.id || parsed._id) extraParams.vendorId = parsed.id || parsed._id;
+          }
+        } catch {}
+      }
+      return httpClient.get("/vendor-portal/venues", { params: { ...extraParams, ...params } });
+    },
 
     getVenueById: (id: string): Promise<any> =>
       httpClient.get(`/vendor-portal/venues/${id}`),
@@ -144,3 +193,4 @@ export const api = {
 };
 
 export default api;
+

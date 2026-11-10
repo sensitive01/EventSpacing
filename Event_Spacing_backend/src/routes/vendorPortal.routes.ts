@@ -42,3 +42,4 @@ router.post("/calendar/slot", optionalAuth, toggleCalendarSlot);
 router.get("/payouts", optionalAuth, getVendorPayouts);
 
 export default router;
+

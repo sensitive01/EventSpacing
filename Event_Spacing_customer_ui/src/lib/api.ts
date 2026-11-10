@@ -5,8 +5,11 @@
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from "axios";
 
-const API_BASE_URL =
+const rawUrl =
   process.env.NEXT_PUBLIC_API_URL || "https://eventspacing.onrender.com/api";
+const API_BASE_URL = rawUrl.endsWith("/api")
+  ? rawUrl
+  : `${rawUrl.replace(/\/$/, "")}/api`;
 
 /**
  * Configure dedicated Axios instance

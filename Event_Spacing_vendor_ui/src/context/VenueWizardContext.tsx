@@ -17,9 +17,85 @@ import {
 } from "@/types/wizard";
 
 /**
- * Default initial state for Step 1: Basic Information.
+ * Clean initial state for Step 1: Basic Information.
  */
-const initialStep1: Step1Data = {
+const cleanStep1: Step1Data = {
+  venueName: "",
+  businessName: "",
+  venueType: "Banquet Hall",
+  eventCategories: [],
+  shortDescription: "",
+  detailedDescription: "",
+};
+
+/**
+ * Clean initial state for Step 2: Location and Contact.
+ */
+const cleanStep2: Step2Data = {
+  addressLine1: "",
+  addressLine2: "",
+  city: "Bengaluru",
+  state: "Karnataka",
+  pincode: "",
+  mapCoordinates: { lat: 12.9784, lng: 77.6408 },
+  primaryContactName: "",
+  phoneNumber: "",
+  emailAddress: "",
+  alternateContactNumber: "",
+  website: "",
+  showContactOnListing: true,
+};
+
+/**
+ * Clean initial state for Step 3: Amenities and Facilities.
+ */
+const cleanStep3: Step3Data = {
+  selectedAmenities: [],
+  totalCapacity: 0,
+  seatingCapacity: 0,
+  floatingCapacity: 0,
+  numberOfHalls: 1,
+  otherFacilities: "",
+};
+
+/**
+ * Clean initial state for Step 4: Pricing and Availability.
+ */
+const cleanStep4: Step4Data = {
+  activeTab: "pricing_packages",
+  pricingType: "Per Day",
+  startingPrice: 0,
+  securityDeposit: 0,
+  advancePaymentPercentage: 30,
+  eventWisePricing: [],
+  cancellationPolicyNotes: "",
+};
+
+/**
+ * Clean initial state for Step 5: Photos and Media.
+ */
+const cleanStep5: Step5Data = {
+  activeTab: "venue_photos",
+  photos: [],
+  videoTourUrl: "",
+  floorPlanFiles: [],
+  verificationDocuments: [],
+};
+
+/**
+ * Clean initial state for Step 6: Review & Submit.
+ */
+const cleanStep6: Step6Data = {
+  isInformationAccurate: false,
+  agreeToTermsAndPrivacy: false,
+  understandVerificationReview: false,
+  submissionStatus: "draft",
+};
+
+/**
+ * Sample test data for quick 1-click preview filling.
+ */
+const sampleStep1: Step1Data = {
   venueName: "The Grand Celebration Hall",
   businessName: "Grand Events Pvt Ltd",
   venueType: "Banquet Hall",
@@ -28,11 +104,8 @@ const initialStep1: Step1Data = {
   detailedDescription: "The Grand Celebration Hall is an exquisite event destination located in the prime area of Indiranagar. Featuring opulent decor, customizable banquet configurations, state-of-the-art acoustics, and dedicated culinary spaces, it is designed to create unforgettable experiences for weddings, corporate conferences, and gala evenings.",
 };
 
-/**
- * Default initial state for Step 2: Location and Contact.
- */
-const initialStep2: Step2Data = {
-  addressLine1: "123, MG Road",
+const sampleStep2: Step2Data = {
+  addressLine1: "123, 100 Feet Road",
   addressLine2: "Near Metro Station, Indiranagar",
   city: "Bengaluru",
   state: "Karnataka",
@@ -40,16 +113,13 @@ const initialStep2: Step2Data = {
   mapCoordinates: { lat: 12.9784, lng: 77.6408 },
   primaryContactName: "Rajesh Kumar",
   phoneNumber: "9876543210",
-  emailAddress: "info@grandvenue.com",
+  emailAddress: "contact@grandcelebration.com",
   alternateContactNumber: "9876543211",
-  website: "https://www.grandvenue.com",
+  website: "https://www.grandcelebration.com",
   showContactOnListing: true,
 };
 
-/**
- * Default initial state for Step 3: Amenities and Facilities.
- */
-const initialStep3: Step3Data = {
+const sampleStep3: Step3Data = {
   selectedAmenities: [
     "AC Hall",
     "Parking",
@@ -64,35 +134,28 @@ const initialStep3: Step3Data = {
     "Valet Parking",
     "Elevator",
   ],
-  totalCapacity: 500,
-  seatingCapacity: 350,
-  floatingCapacity: 500,
+  totalCapacity: 600,
+  seatingCapacity: 400,
+  floatingCapacity: 600,
   numberOfHalls: 2,
   otherFacilities: "Grand chandeliers, private green room for artists, separate catering kitchen, generator backup.",
 };
 
-/**
- * Default initial state for Step 4: Pricing and Availability.
- */
-const initialStep4: Step4Data = {
+const sampleStep4: Step4Data = {
   activeTab: "pricing_packages",
   pricingType: "Per Day",
-  startingPrice: 75000,
-  securityDeposit: 10000,
+  startingPrice: 85000,
+  securityDeposit: 20000,
   advancePaymentPercentage: 30,
   eventWisePricing: [
-    { id: "p-1", eventType: "Wedding", fullDayPrice: 75000, halfDayPrice: 50000, perHourPrice: 12000 },
-    { id: "p-2", eventType: "Corporate Event", fullDayPrice: 45000, halfDayPrice: 30000, perHourPrice: 8000 },
-    { id: "p-3", eventType: "Birthday Party", fullDayPrice: 35000, halfDayPrice: 25000, perHourPrice: 6000 },
-    { id: "p-4", eventType: "Get Together", fullDayPrice: 30000, halfDayPrice: 20000, perHourPrice: 5000 },
+    { id: "p-1", eventType: "Wedding", fullDayPrice: 85000, halfDayPrice: 55000, perHourPrice: 12000 },
+    { id: "p-2", eventType: "Corporate Event", fullDayPrice: 50000, halfDayPrice: 35000, perHourPrice: 8000 },
+    { id: "p-3", eventType: "Birthday Party", fullDayPrice: 40000, halfDayPrice: 28000, perHourPrice: 6000 },
   ],
   cancellationPolicyNotes: "100% refund if cancelled 30 days prior. 50% refund up to 15 days prior.",
 };
 
-/**
- * Default initial state for Step 5: Photos and Media.
- */
-const initialStep5: Step5Data = {
+const sampleStep5: Step5Data = {
   activeTab: "venue_photos",
   photos: [
     {
@@ -116,55 +179,10 @@ const initialStep5: Step5Data = {
       isCover: false,
       fileSize: "3.1 MB",
     },
-    {
-      id: "ph-4",
-      url: "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=600&q=80",
-      tag: "Outdoor Lawn",
-      isCover: false,
-      fileSize: "2.7 MB",
-    },
-    {
-      id: "ph-5",
-      url: "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&w=600&q=80",
-      tag: "Entrance",
-      isCover: false,
-      fileSize: "1.9 MB",
-    },
-    {
-      id: "ph-6",
-      url: "https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=600&q=80",
-      tag: "Bridal Room",
-      isCover: false,
-      fileSize: "2.2 MB",
-    },
-    {
-      id: "ph-7",
-      url: "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=600&q=80",
-      tag: "Parking Area",
-      isCover: false,
-      fileSize: "1.5 MB",
-    },
-    {
-      id: "ph-8",
-      url: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=600&q=80",
-      tag: "Conference Setup",
-      isCover: false,
-      fileSize: "2.8 MB",
-    },
   ],
   videoTourUrl: "https://www.youtube.com/watch?v=example",
   floorPlanFiles: ["Main_Hall_Floor_Plan_v1.pdf"],
-  verificationDocuments: ["Trade_License.pdf", "Fire_Safety_NOC.pdf"],
-};
-
-/**
- * Default initial state for Step 6: Review & Submit.
- */
-const initialStep6: Step6Data = {
-  isInformationAccurate: true,
-  agreeToTermsAndPrivacy: true,
-  understandVerificationReview: true,
-  submissionStatus: "draft",
+  verificationDocuments: ["Trade_License.pdf"],
 };
 
 /**
@@ -182,6 +200,7 @@ export interface VenueWizardContextType {
   updateStep5: (data: Partial<Step5Data>) => void;
   updateStep6: (data: Partial<Step6Data>) => void;
   resetWizard: () => void;
+  fillSampleData: () => void;
 }
 
 const VenueWizardContext = createContext<VenueWizardContextType | undefined>(undefined);
@@ -199,12 +218,12 @@ export const VenueWizardProvider: React.FC<{ children: ReactNode }> = ({ childre
     return {
       currentStep: 1,
       completedSteps: [],
-      step1: initialStep1,
-      step2: initialStep2,
-      step3: initialStep3,
-      step4: initialStep4,
-      step5: initialStep5,
-      step6: initialStep6,
+      step1: cleanStep1,
+      step2: cleanStep2,
+      step3: cleanStep3,
+      step4: cleanStep4,
+      step5: cleanStep5,
+      step6: cleanStep6,
     };
   });
 
@@ -324,7 +343,7 @@ export const VenueWizardProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   /**
-   * Resets wizard to clean initial values.
+   * Resets wizard to clean blank initial values.
    */
   const resetWizard = () => {
     try {
@@ -335,13 +354,33 @@ export const VenueWizardProvider: React.FC<{ children: ReactNode }> = ({ childre
     setState({
       currentStep: 1,
       completedSteps: [],
-      step1: initialStep1,
-      step2: initialStep2,
-      step3: initialStep3,
-      step4: initialStep4,
-      step5: initialStep5,
-      step6: initialStep6,
+      step1: cleanStep1,
+      step2: cleanStep2,
+      step3: cleanStep3,
+      step4: cleanStep4,
+      step5: cleanStep5,
+      step6: cleanStep6,
     });
+  };
+
+  /**
+   * Populates wizard with realistic sample data for fast testing.
+   */
+  const fillSampleData = () => {
+    setState((prev) => ({
+      ...prev,
+      step1: sampleStep1,
+      step2: sampleStep2,
+      step3: sampleStep3,
+      step4: sampleStep4,
+      step5: sampleStep5,
+      step6: {
+        isInformationAccurate: true,
+        agreeToTermsAndPrivacy: true,
+        understandVerificationReview: true,
+        submissionStatus: "draft",
+      },
+    }));
   };
 
   return (
@@ -358,6 +397,7 @@ export const VenueWizardProvider: React.FC<{ children: ReactNode }> = ({ childre
         updateStep5,
         updateStep6,
         resetWizard,
+        fillSampleData,
       }}
     >
       {children}

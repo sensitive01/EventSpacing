@@ -95,22 +95,11 @@ export default function VenueDetailsClient() {
           return;
         }
       } catch (err: any) {
-        console.warn("Backend venue fetch failed, trying mock fallback:", err);
+        console.warn("Backend venue fetch failed:", err);
       }
 
-      // Fallback search in MOCK_VENUES
       if (!isCancelled) {
-        const matched = MOCK_VENUES.find(
-          (v) => v.slug === slug || v.id === slug || v.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === slug
-        );
-
-        if (matched) {
-          setVenue(matched);
-        } else if (MOCK_VENUES.length > 0) {
-          setVenue(MOCK_VENUES[0]);
-        } else {
-          setError("Venue not found.");
-        }
+        setError("Venue not found or has been unlisted.");
         setIsLoading(false);
       }
     };

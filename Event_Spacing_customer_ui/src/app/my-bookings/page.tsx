@@ -21,66 +21,7 @@ import {
 import { CustomerBooking } from "@/types/venue";
 import { api } from "@/lib/api";
 
-const MOCK_CUSTOMER_BOOKINGS: CustomerBooking[] = [
-  {
-    id: "BK-8821",
-    bookingRef: "ES-BLR-2026-8821",
-    venueId: "v-1",
-    venueName: "The Royal Grandeur",
-    venueCoverImage: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=800&q=80",
-    locality: "Indiranagar",
-    city: "Bengaluru",
-    selectedSpaceName: "Grand Imperial Ballroom",
-    packageTitle: "FREE VENUE with Royal Catering Plan (350 Pax)",
-    eventCategory: "Marriage / Wedding",
-    eventDate: "November 18, 2026",
-    timeSlot: "Full Day (8 AM - 11 PM)",
-    guestCount: 350,
-    totalAmount: 402500,
-    advancePaid: 120750,
-    balanceDue: 281750,
-    securityDeposit: 35000,
-    status: "confirmed",
-    cancellationPolicy: {
-      refundableUntilDate: "November 04, 2026 (14 days prior)",
-      refundPercentage: 85,
-      termsSummary: "85% refund of advance deposit if cancelled 14+ days prior. 50% refund between 7-14 days. Non-refundable under 7 days.",
-    },
-    customerName: "Suniti & Raghav Rao",
-    customerPhone: "+91 98450 12345",
-    customerEmail: "raghav.rao@gmail.com",
-    createdAt: "October 14, 2026",
-  },
-  {
-    id: "BK-8711",
-    bookingRef: "ES-BLR-2026-8711",
-    venueId: "v-4",
-    venueName: "Grand Palace Banquet",
-    venueCoverImage: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=800&q=80",
-    locality: "Koramangala",
-    city: "Bengaluru",
-    selectedSpaceName: "Main AC Banquet Hall",
-    packageTitle: "FREE HALL for Birthday (120 Pax)",
-    eventCategory: "Birthday",
-    eventDate: "October 12, 2026",
-    timeSlot: "Evening Slot (4 PM - 11 PM)",
-    guestCount: 120,
-    totalAmount: 90000,
-    advancePaid: 90000,
-    balanceDue: 0,
-    securityDeposit: 15000,
-    status: "completed",
-    cancellationPolicy: {
-      refundableUntilDate: "October 01, 2026",
-      refundPercentage: 90,
-      termsSummary: "Completed event.",
-    },
-    customerName: "Suniti & Raghav Rao",
-    customerPhone: "+91 98450 12345",
-    customerEmail: "raghav.rao@gmail.com",
-    createdAt: "September 25, 2026",
-  },
-];
+const MOCK_CUSTOMER_BOOKINGS: CustomerBooking[] = [];
 
 export default function CustomerBookingsPage() {
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
@@ -126,7 +67,7 @@ export default function CustomerBookingsPage() {
 
       // Guest or Fallback
       if (!isCancelled) {
-        setBookings(MOCK_CUSTOMER_BOOKINGS);
+        setBookings([]);
         setIsLoading(false);
       }
     };

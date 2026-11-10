@@ -166,47 +166,10 @@ function VenuesExploreContent() {
           setIsLoading(false);
         }
       } catch (error) {
-        console.warn("Backend API not reachable, falling back to local dataset:", error);
+        console.warn("Backend API not reachable:", error);
         if (!isCancelled) {
-          // Apply client-side filtering on mock venues fallback
-          let list = [...MOCK_VENUES];
-
-          if (activeCategory === "FREE Venues") {
-            list = list.filter((v) => v.pricing?.hasFreeVenueOption === true);
-          } else if (activeCategory !== "All Events") {
-            list = list.filter((v) =>
-              v.eventTypes?.some((et) =>
-                et.toLowerCase().includes(activeCategory.toLowerCase())
-              )
-            );
-          }
-
-          if (filters.searchQuery.trim()) {
-            const q = filters.searchQuery.toLowerCase();
-            list = list.filter(
-              (v) =>
-                v.name.toLowerCase().includes(q) ||
-                v.location.locality.toLowerCase().includes(q) ||
-                v.shortDescription.toLowerCase().includes(q)
-            );
-          }
-
-          if (filters.selectedLocalities.length > 0 && !filters.selectedLocalities.includes("Bengaluru")) {
-            list = list.filter((v) => filters.selectedLocalities.includes(v.location.locality));
-          }
-
-          list = list.filter((v) => v.pricing.pricePerDay <= filters.maxPrice);
-
-          if (filters.sortBy === "price_low_high") {
-            list.sort((a, b) => a.pricing.pricePerDay - b.pricing.pricePerDay);
-          } else if (filters.sortBy === "price_high_low") {
-            list.sort((a, b) => b.pricing.pricePerDay - a.pricing.pricePerDay);
-          } else if (filters.sortBy === "rating_high_low") {
-            list.sort((a, b) => b.rating - a.rating);
-          }
-
-          setVenues(list);
-          setTotalCount(list.length);
+          setVenues([]);
+          setTotalCount(0);
           setTotalPages(1);
           setIsLoading(false);
         }

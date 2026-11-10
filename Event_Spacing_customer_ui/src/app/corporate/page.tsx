@@ -161,42 +161,41 @@ export default function CorporatePage() {
   const [submitError, setSubmitError] = useState("");
 
   // Live corporate venues loaded from MongoDB Atlas backend
-  const [corporateVenues, setCorporateVenues] = useState<any[]>(() =>
-    MOCK_VENUES.filter((venue) =>
-      venue.eventTypes.some((et) =>
-        ["Corporate Events", "Get Together", "Presentations"].includes(et)
-      )
-    ).slice(0, 3)
-  );
+  const [corporateVenues, setCorporateVenues] = useState<any[]>([]);
 
   useEffect(() => {
     let isCancelled = false;
     api.venues
-      .getAll({ limit: 3 })
+      .getAll({ eventType: "Corporate Events", limit: 3 })
       .then((res: any) => {
         const liveVenues = Array.isArray(res?.data) ? res.data : (res?.data?.venues || []);
-        if (!isCancelled && liveVenues && liveVenues.length > 0) {
-          const mapped = liveVenues.map((v: any) => ({
-            id: v._id || v.id,
-            name: v.name,
-            badge: v.badge || "Verified Corporate",
-            rating: v.rating || 4.8,
-            reviewCount: v.reviewCount || 42,
-            coverImage: v.coverImage,
-            location: {
-              locality: v.location?.locality || "Bengaluru",
-              city: v.location?.city || "Bengaluru",
-            },
-            amenities: v.amenities && v.amenities.length > 0 ? v.amenities : ["High Speed WiFi", "AV Tech Support", "Catering"],
-            pricing: {
-              pricePerDay: v.rentalPricing?.standardDayRent || 75000,
-            },
-          }));
-          setCorporateVenues(mapped);
+        if (!isCancelled) {
+          if (liveVenues && liveVenues.length > 0) {
+            const mapped = liveVenues.map((v: any) => ({
+              id: v._id || v.id,
+              name: v.name,
+              badge: v.badge || "Verified Corporate",
+              rating: v.rating || 4.8,
+              reviewCount: v.reviewCount || 0,
+              coverImage: v.coverImage || "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80",
+              location: {
+                locality: v.location?.locality || "Bengaluru",
+                city: v.location?.city || "Bengaluru",
+              },
+              amenities: v.amenities && v.amenities.length > 0 ? v.amenities : ["High Speed WiFi", "AV Tech Support", "Catering"],
+              pricing: {
+                pricePerDay: v.pricing?.pricePerDay || v.rentalPricing?.standardDayRent || 75000,
+              },
+            }));
+            setCorporateVenues(mapped);
+          } else {
+            setCorporateVenues([]);
+          }
         }
       })
       .catch((err) => {
         console.warn("Corporate venues fetch error:", err);
+        if (!isCancelled) setCorporateVenues([]);
       });
 
     return () => {
@@ -473,70 +472,78 @@ export default function CorporatePage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {corporateVenues.map((venue) => (
-            <div
-              key={venue.id}
-              className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group"
-            >
-              <div className="relative aspect-[16/10] overflow-hidden bg-gray-100">
-                <Image
-                  src={venue.coverImage}
-                  alt={venue.name}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  sizes="(max-width: 768px) 100vw, 33vw"
-                />
-                <div className="absolute top-3 left-3 bg-[#380c48] text-white text-[11px] font-bold px-2.5 py-1 rounded-md">
-                  {venue.badge}
-                </div>
-                <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/60 backdrop-blur-md text-white text-xs px-2 py-0.5 rounded">
-                  <Star className="w-3.5 h-3.5 text-gold-400 fill-gold-400" />
-                  <span className="font-bold">{venue.rating}</span>
-                  <span className="text-[10px] text-white/70">({venue.reviewCount})</span>
-                </div>
-              </div>
-
-              <div className="p-5 flex-1 flex flex-col justify-between">
-                <div>
-                  <h3 className="font-bold text-base text-gray-900 group-hover:text-[#380c48] transition-colors mb-1">
-                    {venue.name}
-                  </h3>
-                  <div className="flex items-center gap-1 text-xs text-gray-500 mb-3">
-                    <MapPin className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />
-                    <span>{venue.location.locality}, {venue.location.city}</span>
+        {corporateVenues.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-gray-100 p-8 text-center text-gray-500 shadow-soft">
+            <Building className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="font-semibold text-gray-700">No corporate venues listed yet</p>
+            <p className="text-xs text-gray-400 mt-1">Check back soon or list your corporate convention space on Partner Hub.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {corporateVenues.map((venue) => (
+              <div
+                key={venue.id}
+                className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group"
+              >
+                <div className="relative aspect-[16/10] overflow-hidden bg-gray-100">
+                  <Image
+                    src={venue.coverImage}
+                    alt={venue.name}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                  />
+                  <div className="absolute top-3 left-3 bg-[#380c48] text-white text-[11px] font-bold px-2.5 py-1 rounded-md">
+                    {venue.badge}
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {venue.amenities.slice(0, 3).map((amenity: string) => (
-                      <span
-                        key={amenity}
-                        className="text-[10px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded"
-                      >
-                        {amenity}
-                      </span>
-                    ))}
+                  <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/60 backdrop-blur-md text-white text-xs px-2 py-0.5 rounded">
+                    <Star className="w-3.5 h-3.5 text-gold-400 fill-gold-400" />
+                    <span className="font-bold">{venue.rating}</span>
+                    <span className="text-[10px] text-white/70">({venue.reviewCount})</span>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
-                    <div className="text-[11px] text-gray-400 uppercase font-semibold">Starting at</div>
-                    <div className="font-extrabold text-[#380c48] text-sm">
-                      ₹{venue.pricing.pricePerDay.toLocaleString("en-IN")}
-                      <span className="text-[10px] text-gray-500 font-normal"> /day</span>
+                    <h3 className="font-bold text-base text-gray-900 group-hover:text-[#380c48] transition-colors mb-1">
+                      {venue.name}
+                    </h3>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mb-3">
+                      <MapPin className="w-3.5 h-3.5 text-gold-600 flex-shrink-0" />
+                      <span>{venue.location.locality}, {venue.location.city}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {venue.amenities.slice(0, 3).map((amenity: string) => (
+                        <span
+                          key={amenity}
+                          className="text-[10px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded"
+                        >
+                          {amenity}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                  <a
-                    href="#rfp-form"
-                    className="bg-[#380c48] hover:bg-[#5a136b] text-white text-xs font-bold px-3.5 py-2 rounded-lg transition-colors"
-                  >
-                    Inquire
-                  </a>
+
+                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                    <div>
+                      <div className="text-[11px] text-gray-400 uppercase font-semibold">Starting at</div>
+                      <div className="font-extrabold text-[#380c48] text-sm">
+                        ₹{venue.pricing?.pricePerDay?.toLocaleString("en-IN") || "75,000"}
+                        <span className="text-[10px] text-gray-500 font-normal"> /day</span>
+                      </div>
+                    </div>
+                    <a
+                      href="#rfp-form"
+                      className="bg-[#380c48] hover:bg-[#5a136b] text-white text-xs font-bold px-3.5 py-2 rounded-lg transition-colors"
+                    >
+                      Inquire
+                    </a>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 6. Corporate RFP & Event Inquiry Form */}

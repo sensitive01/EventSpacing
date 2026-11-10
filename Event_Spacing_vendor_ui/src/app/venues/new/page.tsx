@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles, RotateCcw } from "lucide-react";
 import {
   VenueWizardProvider,
   useVenueWizard,
@@ -40,10 +40,12 @@ const WizardFormSwitcher: React.FC = () => {
 };
 
 const WizardWorkspace: React.FC = () => {
+  const { fillSampleData, resetWizard } = useVenueWizard();
+
   return (
     <div className="w-full pb-20 space-y-6">
-      {/* Top back navigation */}
-      <div className="flex items-center justify-between">
+      {/* Top back navigation & helper controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Link
           href="/venues"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-brand-900 transition-colors"
@@ -51,9 +53,28 @@ const WizardWorkspace: React.FC = () => {
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to My Venues</span>
         </Link>
-        <span className="text-[11px] text-gray-400">
-          Draft auto-saved to local workspace
-        </span>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            type="button"
+            onClick={fillSampleData}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold-50 hover:bg-gold-100 text-gold-900 border border-gold-300 text-xs font-bold transition-all shadow-xs"
+            title="Populate realistic test data across all 6 steps"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-gold-600" />
+            <span>Quick Fill Sample</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={resetWizard}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-800 hover:bg-gray-100 text-xs font-medium transition-colors"
+            title="Clear all fields and draft"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset</span>
+          </button>
+        </div>
       </div>
 
       {/* 1. Header Banner & Progress Stepper */}

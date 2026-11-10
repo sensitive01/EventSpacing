@@ -29,7 +29,6 @@ import {
   BadgePercent,
   Check,
 } from "lucide-react";
-import { currentVendorProfile } from "@/data/mockVendorData";
 import { api } from "@/lib/api";
 
 type AuthMode = "signin" | "register";
@@ -43,17 +42,17 @@ export default function VendorSignInPage() {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("phone");
 
   // Phone OTP Flow States
-  const [phoneNumber, setPhoneNumber] = useState("9845012345");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [countdown, setCountdown] = useState(30);
 
   // Email / Password Form States
-  const [email, setEmail] = useState("partner@prestigevenues.com");
-  const [password, setPassword] = useState("PrestigePartner2026!");
-  const [fullName, setFullName] = useState("Vikramaditya Rao");
-  const [businessName, setBusinessName] = useState("Prestige Hospitality & Banquets");
-  const [gstNumber, setGstNumber] = useState("29AABCP1234F1Z8");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -153,7 +152,7 @@ export default function VendorSignInPage() {
 
       if (token && typeof window !== "undefined") {
         localStorage.setItem("es_vendor_token", token);
-        localStorage.setItem("es_vendor_user", JSON.stringify(user || currentVendorProfile));
+        localStorage.setItem("es_vendor_user", JSON.stringify(user || { name: `Partner (${cleanPhone.slice(-4)})`, phone: cleanPhone }));
         window.dispatchEvent(new Event("vendor-auth-change"));
       }
 
@@ -163,17 +162,8 @@ export default function VendorSignInPage() {
         router.push("/");
       }, 1000);
     } catch (err: any) {
-      // If offline, allow fallback demo login
-      if (typeof window !== "undefined") {
-        localStorage.setItem("es_vendor_token", "mock_vendor_jwt_token_2026");
-        localStorage.setItem("es_vendor_user", JSON.stringify(currentVendorProfile));
-        window.dispatchEvent(new Event("vendor-auth-change"));
-      }
       setIsLoading(false);
-      setAuthSuccess(true);
-      setTimeout(() => {
-        router.push("/");
-      }, 1000);
+      setErrorMessage(err?.response?.data?.message || err?.message || "Invalid or expired OTP code. Please try again.");
     }
   };
 
@@ -210,7 +200,7 @@ export default function VendorSignInPage() {
 
       if (token && typeof window !== "undefined") {
         localStorage.setItem("es_vendor_token", token);
-        localStorage.setItem("es_vendor_user", JSON.stringify(user || currentVendorProfile));
+        localStorage.setItem("es_vendor_user", JSON.stringify(user || { name: fullName || email.split("@")[0], email }));
         window.dispatchEvent(new Event("vendor-auth-change"));
       }
 
@@ -220,47 +210,8 @@ export default function VendorSignInPage() {
         router.push("/");
       }, 1000);
     } catch (err: any) {
-      // If backend reports invalid credentials, display clear error message
-      console.warn("Partner auth attempt failed, checking demo bypass:", err);
-      if (email === "partner@prestigevenues.com") {
-        // Fallback for prestige demo
-        if (typeof window !== "undefined") {
-          localStorage.setItem("es_vendor_token", "mock_vendor_jwt_token_2026");
-          localStorage.setItem("es_vendor_user", JSON.stringify(currentVendorProfile));
-          window.dispatchEvent(new Event("vendor-auth-change"));
-        }
-        setIsLoading(false);
-        setAuthSuccess(true);
-        setTimeout(() => {
-          router.push("/");
-        }, 1000);
-        return;
-      }
-
       setIsLoading(false);
-      setErrorMessage(err.message || "Failed to authenticate partner credentials. Please check your email and password.");
-    }
-  };
-
-  /**
-   * Fills demo credentials for rapid testing and evaluation.
-   */
-  const fillDemoAccount = (accountType: "prestige" | "glasshouse") => {
-    setAuthMode("signin");
-    setLoginMethod("email");
-    setErrorMessage("");
-    if (accountType === "prestige") {
-      setFullName("Vikramaditya Rao");
-      setBusinessName("Prestige Hospitality & Banquets");
-      setEmail("partner@prestigevenues.com");
-      setPassword("PrestigePartner2026!");
-      setPhoneNumber("9845012345");
-    } else {
-      setFullName("Suhasini Mehta");
-      setBusinessName("Silver Oaks Glasshouse & Retreats");
-      setEmail("suhasini@silveroaksretreats.in");
-      setPassword("SilverOaksHost2026!");
-      setPhoneNumber("9740066789");
+      setErrorMessage(err?.response?.data?.message || err?.message || "Authentication failed. Please check your email and password.");
     }
   };
 
@@ -786,39 +737,6 @@ export default function VendorSignInPage() {
                 </button>
               </form>
             )}
-
-            {/* Quick Demo Accounts for Immediate Review */}
-            <div className="mt-6 pt-4 border-t border-dashed border-gray-200">
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span className="text-gray-500 font-semibold">1-Click Demo Partner Accounts:</span>
-                <span className="text-[10px] text-gray-400">Click to prefill credentials</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => fillDemoAccount("prestige")}
-                  className="p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200/60 text-left transition-colors flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-xs font-bold text-brand-950">Vikramaditya Rao</p>
-                    <p className="text-[10px] text-brand-700">Prestige Hospitality (Indiranagar)</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-brand-600" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => fillDemoAccount("glasshouse")}
-                  className="p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200/60 text-left transition-colors flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-xs font-bold text-amber-950">Suhasini Mehta</p>
-                    <p className="text-[10px] text-amber-800">Silver Oaks Glasshouse (Whitefield)</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-amber-600" />
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Bottom Trust & Compliance Footer */}

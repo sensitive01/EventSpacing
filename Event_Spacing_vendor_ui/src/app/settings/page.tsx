@@ -16,7 +16,44 @@ import { currentVendorProfile } from "@/data/mockVendorData";
 import { api } from "@/lib/api";
 
 export default function VendorSettingsPage() {
-  const [profile, setProfile] = useState<any>(currentVendorProfile);
+  const [profile, setProfile] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("es_vendor_user");
+        if (stored) {
+          const u = JSON.parse(stored);
+          return {
+            ownerName: u.name || "",
+            businessName: u.businessName || u.companyName || "",
+            phone: u.phone || "",
+            email: u.email || "",
+            gstNumber: u.gstNumber || "",
+            panNumber: u.panNumber || "",
+            bankDetails: u.bankDetails || {
+              bankName: "",
+              accountNumber: "",
+              ifscCode: "",
+              accountHolder: "",
+            },
+          };
+        }
+      } catch {}
+    }
+    return {
+      ownerName: "",
+      businessName: "",
+      phone: "",
+      email: "",
+      gstNumber: "",
+      panNumber: "",
+      bankDetails: {
+        bankName: "",
+        accountNumber: "",
+        ifscCode: "",
+        accountHolder: "",
+      },
+    };
+  });
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 

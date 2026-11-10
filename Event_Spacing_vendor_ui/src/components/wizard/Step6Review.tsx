@@ -20,6 +20,8 @@ import {
   IndianRupee,
   Camera,
   Check,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { useVenueWizard } from "@/context/VenueWizardContext";
 import { api } from "@/lib/api";
@@ -72,36 +74,54 @@ export const Step6Review: React.FC = () => {
       addressLine1: step2.addressLine1,
       addressLine2: step2.addressLine2,
       city: step2.city,
+      locality: step2.addressLine2 || step2.city || "Bengaluru",
       state: step2.state,
       pincode: step2.pincode,
       primaryContactName: step2.primaryContactName,
       phoneNumber: step2.phoneNumber,
       emailAddress: step2.emailAddress,
+      website: step2.website,
       selectedAmenities: step3.selectedAmenities,
       seatingCapacity: step3.seatingCapacity,
       floatingCapacity: step3.floatingCapacity,
       totalCapacity: step3.totalCapacity,
       numberOfHalls: step3.numberOfHalls,
       pricePerDay: step4.startingPrice || 120000,
-      halfDayPrice: step4.eventWisePricing?.[0]?.halfDayPrice || 75000,
-      perHourPrice: step4.eventWisePricing?.[0]?.perHourPrice || 15000,
+      halfDayPrice: step4.eventWisePricing?.[0]?.halfDayPrice || Math.round((step4.startingPrice || 120000) * 0.6),
+      perHourPrice: step4.eventWisePricing?.[0]?.perHourPrice || Math.round((step4.startingPrice || 120000) * 0.12),
       securityDeposit: step4.securityDeposit || 25000,
+      advancePaymentPercentage: step4.advancePaymentPercentage || 30,
+      eventWisePricing: step4.eventWisePricing,
+      cancellationPolicyNotes: step4.cancellationPolicyNotes,
       coverImage: coverUrl,
       galleryImages: step5.photos.map((p) => p.url),
+      videoTourUrl: step5.videoTourUrl,
     };
 
     try {
       const res = await api.vendor.createVenue(payload);
       setIsSubmitting(false);
-      setCreatedVenue(res?.data || payload);
+      const created = res?.data || payload;
+      setCreatedVenue(created);
       updateStep6({ submissionStatus: "submitted" });
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("event_spacing_venue_draft");
+        if (res?.token) {
+          localStorage.setItem("es_vendor_token", res.token);
+        }
+        if (res?.user) {
+          localStorage.setItem("es_vendor_user", JSON.stringify(res.user));
+          window.dispatchEvent(new Event("vendor-auth-change"));
+        }
+      }
       setIsSuccessModalOpen(true);
     } catch (err: any) {
-      console.warn("Backend venue creation failed, proceeding with local fallback:", err);
+      console.error("Backend venue creation failed:", err);
       setIsSubmitting(false);
-      setCreatedVenue(payload);
-      updateStep6({ submissionStatus: "submitted" });
-      setIsSuccessModalOpen(true);
+      setSubmitError(
+        err?.message ||
+        "Could not save venue to the database. Please check your backend connection and try again."
+      );
     }
   };
 
@@ -382,6 +402,17 @@ export const Step6Review: React.FC = () => {
           </label>
         </div>
 
+        {/* Submission Error Banner */}
+        {submitError && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-bold text-rose-950">Submission Failed</div>
+              <p>{submitError}</p>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="pt-6 flex items-center justify-between border-t border-gray-100">
           <button
@@ -413,15 +444,16 @@ export const Step6Review: React.FC = () => {
             </div>
 
             <h3 className="font-serif text-2xl font-bold text-brand-950">
-              Venue Submitted for Verification!
+              Venue Live &amp; Submitted!
             </h3>
 
             <p className="text-xs sm:text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
-              Your venue <strong>&quot;{step1.venueName}&quot;</strong> has been successfully queued for compliance audit. Our hospitality team will review your photos and licensing within <strong>24–48 hours</strong>.
+              Your venue <strong>&quot;{createdVenue?.name || step1.venueName}&quot;</strong> has been successfully saved to the database and is now live across the platform.
             </p>
 
             <div className="p-4 rounded-2xl bg-brand-50 text-xs text-brand-950 text-left space-y-1">
               <div><strong>Application Reference:</strong> ES-BLR-{Date.now().toString().slice(-6)}</div>
+              <div><strong>Venue Slug:</strong> {createdVenue?.slug || "published"}</div>
               <div><strong>Registered Mobile:</strong> +91 {step2.phoneNumber}</div>
               <div><strong>Confirmation Email:</strong> {step2.emailAddress}</div>
             </div>
@@ -429,16 +461,27 @@ export const Step6Review: React.FC = () => {
             <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/venues"
-                className="px-6 py-2.5 rounded-xl bg-brand-800 hover:bg-brand-900 text-white font-semibold text-xs transition-colors"
+                className="px-6 py-2.5 rounded-xl bg-brand-800 hover:bg-brand-900 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
               >
-                Browse Marketplace
+                <span>Manage in My Venues</span>
               </Link>
+              {createdVenue?.slug && (
+                <a
+                  href={`http://localhost:3000/venues/${createdVenue.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-2.5 rounded-xl border border-brand-800 text-brand-900 font-semibold text-xs hover:bg-brand-50 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span>View Customer Page</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
               <button
                 type="button"
                 onClick={() => setIsSuccessModalOpen(false)}
                 className="px-6 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-semibold text-xs hover:bg-gray-50"
               >
-                Review Summary
+                Close
               </button>
             </div>
           </div>

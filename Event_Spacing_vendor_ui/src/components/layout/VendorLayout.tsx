@@ -22,7 +22,7 @@ import {
   CheckCircle2,
   LogOut,
 } from "lucide-react";
-import { currentVendorProfile } from "@/data/mockVendorData";
+import { api } from "@/lib/api";
 
 interface VendorLayoutProps {
   children: React.ReactNode;
@@ -33,11 +33,15 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeVenueDropdown, setActiveVenueDropdown] = useState(false);
-  const [selectedVenue, setSelectedVenue] = useState("The Royal Crystal Palace");
+  const [selectedVenue, setSelectedVenue] = useState<string>("Loading workspace...");
+  const [userVenues, setUserVenues] = useState<any[]>([]);
+  const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
   const [vendorUser, setVendorUser] = useState<any>(null);
 
-  // Sync current authenticated vendor session from localStorage
+  // Sync current authenticated vendor session from localStorage and backend
   useEffect(() => {
+    let isMounted = true;
+
     const syncVendor = () => {
       try {
         const stored = localStorage.getItem("es_vendor_user");
@@ -52,9 +56,43 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
     };
 
     syncVendor();
+
+    // Fetch user's venues & stats for sidebar workspace and badge
+    const loadSidebarData = async () => {
+      try {
+        const [venuesRes, statsRes] = await Promise.allSettled([
+          api.vendor.getVenues(),
+          api.vendor.getStats(),
+        ]);
+
+        if (isMounted) {
+          if (venuesRes.status === "fulfilled" && Array.isArray(venuesRes.value?.data)) {
+            const fetched = venuesRes.value.data;
+            setUserVenues(fetched);
+            if (fetched.length > 0) {
+              setSelectedVenue(fetched[0].name);
+            } else {
+              setSelectedVenue("No Active Venue");
+            }
+          } else {
+            setSelectedVenue("No Active Venue");
+          }
+
+          if (statsRes.status === "fulfilled" && statsRes.value?.data) {
+            setNewLeadsCount(statsRes.value.data.newLeads || 0);
+          }
+        }
+      } catch (err) {
+        if (isMounted) setSelectedVenue("No Active Venue");
+      }
+    };
+
+    loadSidebarData();
+
     window.addEventListener("vendor-auth-change", syncVendor);
     window.addEventListener("storage", syncVendor);
     return () => {
+      isMounted = false;
       window.removeEventListener("vendor-auth-change", syncVendor);
       window.removeEventListener("storage", syncVendor);
     };
@@ -69,20 +107,30 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
     router.push("/signin");
   };
 
-  const displayName = vendorUser?.name || currentVendorProfile.ownerName;
+  const displayName = vendorUser?.name || "Partner Account";
+  const displayBusiness =
+    vendorUser?.businessName ||
+    vendorUser?.companyName ||
+    (userVenues.length > 0 ? userVenues[0].name : "Event Partner");
+
   const initials = displayName
     .split(" ")
     .map((w: string) => w[0])
     .filter(Boolean)
     .slice(0, 2)
     .join("")
-    .toUpperCase() || "VR";
+    .toUpperCase() || "EP";
 
   const navigationItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "My Venues", href: "/venues", icon: Building2 },
     { name: "Add New Venue", href: "/venues/new", icon: PlusCircle, isHighlight: true },
-    { name: "Leads & Inquiries", href: "/leads", icon: MessageSquare, badge: "4 Leads" },
+    {
+      name: "Leads & Inquiries",
+      href: "/leads",
+      icon: MessageSquare,
+      badge: newLeadsCount > 0 ? `${newLeadsCount} New` : undefined,
+    },
     { name: "Availability Calendar", href: "/calendar", icon: CalendarDays },
     { name: "Payouts & Finance", href: "/payouts", icon: Wallet },
     { name: "Business Settings", href: "/settings", icon: Settings },
@@ -135,24 +183,46 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
 
             {activeVenueDropdown && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-[#2b0d38] border border-brand-700/60 rounded-xl shadow-2xl p-1 z-50">
-                {["The Royal Crystal Palace", "Emerald Glass Pavilion & Lawn", "Skylight Heritage Courtyard"].map(
-                  (venueName) => (
-                    <button
-                      key={venueName}
-                      onClick={() => {
-                        setSelectedVenue(venueName);
-                        setActiveVenueDropdown(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors flex items-center justify-between ${
-                        selectedVenue === venueName
-                          ? "bg-gold-500/20 text-gold-300 font-semibold"
-                          : "text-gray-300 hover:bg-brand-800/60"
-                      }`}
+                {userVenues.length === 0 ? (
+                  <div className="p-2 text-center text-xs text-gray-400">
+                    <p>No venues listed yet</p>
+                    <Link
+                      href="/venues/new"
+                      onClick={() => setActiveVenueDropdown(false)}
+                      className="mt-1 block text-gold-400 hover:underline font-bold text-[11px]"
                     >
-                      <span className="truncate">{venueName}</span>
-                      {selectedVenue === venueName && <CheckCircle2 className="w-3.5 h-3.5 text-gold-400 shrink-0" />}
-                    </button>
-                  )
+                      + List Your First Venue
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    {userVenues.map((v: any) => (
+                      <button
+                        key={v.id || v._id}
+                        onClick={() => {
+                          setSelectedVenue(v.name);
+                          setActiveVenueDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors flex items-center justify-between ${
+                          selectedVenue === v.name
+                            ? "bg-gold-500/20 text-gold-300 font-semibold"
+                            : "text-gray-300 hover:bg-brand-800/60"
+                        }`}
+                      >
+                        <span className="truncate">{v.name}</span>
+                        {selectedVenue === v.name && <CheckCircle2 className="w-3.5 h-3.5 text-gold-400 shrink-0" />}
+                      </button>
+                    ))}
+                    <div className="pt-1 mt-1 border-t border-brand-800">
+                      <Link
+                        href="/venues/new"
+                        onClick={() => setActiveVenueDropdown(false)}
+                        className="block px-3 py-1.5 text-xs text-gold-400 hover:bg-brand-800/60 rounded-lg font-semibold"
+                      >
+                        + Add Another Venue
+                      </Link>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -194,30 +264,30 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
         <div className="p-4 border-t border-brand-800/40 bg-brand-950/40">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-500 to-amber-600 flex items-center justify-center text-brand-950 font-bold shadow-md shrink-0">
-              VR
+              {initials}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-semibold text-white truncate">
-                  {currentVendorProfile.ownerName}
+                  {displayName}
                 </span>
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               </div>
-              <p className="text-[11px] text-gray-400 truncate">{currentVendorProfile.businessName}</p>
+              <p className="text-[11px] text-gray-400 truncate">{displayBusiness}</p>
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-brand-900/80 flex items-center justify-between text-[11px] text-gray-400">
             <span className="inline-flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Verified Vendor
             </span>
-            <Link
-              href="/signin"
+            <button
+              onClick={handleLogout}
               className="text-gray-400 hover:text-gold-300 flex items-center gap-1 transition-colors"
-              title="Sign in as another vendor or sign out"
+              title="Sign out"
             >
               <LogOut className="w-3 h-3" />
               <span>Sign Out</span>
-            </Link>
+            </button>
           </div>
         </div>
       </aside>
@@ -262,7 +332,9 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
               className="relative p-2 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-gold-500"></span>
+              {newLeadsCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-gold-500"></span>
+              )}
             </Link>
 
             <div className="h-6 w-px bg-gray-200"></div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   MessageSquare,
   Phone,
@@ -17,16 +18,16 @@ import {
   ChevronDown,
   Building2,
   AlertCircle,
+  PlusCircle,
+  ArrowRight,
 } from "lucide-react";
-import { vendorLeadsList as initialLeads } from "@/data/mockVendorData";
 import { VendorLead, LeadStatus } from "@/types/vendor";
 import { api } from "@/lib/api";
 
 export default function VendorLeadsPage() {
-  const [leads, setLeads] = useState<VendorLead[]>(initialLeads);
+  const [leads, setLeads] = useState<VendorLead[]>([]);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedLead, setSelectedLead] = useState<VendorLead | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real inquiries from MongoDB Atlas
@@ -35,13 +36,20 @@ export default function VendorLeadsPage() {
     const fetchLeads = async () => {
       try {
         const res = await api.vendor.getLeads();
-        if (isMounted && res?.data && res.data.length > 0) {
-          setLeads(res.data);
+        if (isMounted) {
+          if (res?.data && Array.isArray(res.data)) {
+            setLeads(res.data);
+          } else {
+            setLeads([]);
+          }
           setIsLoading(false);
         }
       } catch (err) {
-        console.warn("Could not fetch live leads, using fallback:", err);
-        if (isMounted) setIsLoading(false);
+        console.warn("Could not fetch live leads:", err);
+        if (isMounted) {
+          setLeads([]);
+          setIsLoading(false);
+        }
       }
     };
 
@@ -75,10 +83,10 @@ export default function VendorLeadsPage() {
   const filteredLeads = leads.filter((lead) => {
     const matchesTab = activeTab === "all" || lead.status === activeTab;
     const matchesSearch =
-      lead.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.venueName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.eventType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.customerPhone.includes(searchQuery);
+      (lead.customerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (lead.venueName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (lead.eventType || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (lead.customerPhone || "").includes(searchQuery);
     return matchesTab && matchesSearch;
   });
 
@@ -88,7 +96,7 @@ export default function VendorLeadsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-xs uppercase font-bold text-gold-600 tracking-wider">Inquiry Management</span>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-gray-900">Leads & Inquiries</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-gray-900">Leads &amp; Inquiries</h1>
           <p className="text-xs sm:text-sm text-gray-500">
             Real-time customer inquiries forwarded directly from the Event Spacing customer marketplace.
           </p>
@@ -103,61 +111,121 @@ export default function VendorLeadsPage() {
         </div>
       </div>
 
-      {/* 2. Filter & Search Controls */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-200/80 shadow-soft flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {[
-            { id: "all", label: "All Inquiries", count: leads.length },
-            { id: "new", label: "New Leads", count: leads.filter((l) => l.status === "new").length },
-            { id: "contacted", label: "Contacted", count: leads.filter((l) => l.status === "contacted").length },
-            { id: "visited", label: "Site Visit", count: leads.filter((l) => l.status === "visited").length },
-            { id: "booked", label: "Booked", count: leads.filter((l) => l.status === "booked").length },
-            { id: "declined", label: "Declined", count: leads.filter((l) => l.status === "declined").length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${
-                activeTab === tab.id
-                  ? "bg-brand-900 text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  activeTab === tab.id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+      {/* 2. Filter & Search Controls (Shown when leads exist) */}
+      {leads.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 border border-gray-200/80 shadow-soft flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {[
+              { id: "all", label: "All Inquiries", count: leads.length },
+              { id: "new", label: "New Leads", count: leads.filter((l) => l.status === "new").length },
+              { id: "contacted", label: "Contacted", count: leads.filter((l) => l.status === "contacted").length },
+              { id: "visited", label: "Site Visit", count: leads.filter((l) => l.status === "visited").length },
+              { id: "booked", label: "Booked", count: leads.filter((l) => l.status === "booked").length },
+              { id: "declined", label: "Declined", count: leads.filter((l) => l.status === "declined").length },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${
+                  activeTab === tab.id
+                    ? "bg-brand-900 text-white shadow-xs"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
-                {tab.count}
-              </span>
-            </button>
+                <span>{tab.label}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    activeTab === tab.id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="relative min-w-[240px]">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search customer, phone, venue..."
+              className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-brand-800 focus:bg-white"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 3. Main Leads Section */}
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-soft animate-pulse space-y-4">
+              <div className="h-5 bg-gray-200 rounded w-1/3"></div>
+              <div className="h-4 bg-gray-100 rounded w-1/2"></div>
+              <div className="h-12 bg-gray-50 rounded-2xl w-full"></div>
+            </div>
           ))}
         </div>
-
-        <div className="relative min-w-[240px]">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search customer, phone, venue..."
-            className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-brand-800 focus:bg-white"
-          />
-        </div>
-      </div>
-
-      {/* 3. Leads List */}
-      <div className="space-y-4">
-        {filteredLeads.length === 0 ? (
-          <div className="bg-white rounded-3xl p-12 text-center border border-gray-200/80 shadow-soft">
-            <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <h3 className="font-serif text-lg font-bold text-gray-700">No leads found</h3>
-            <p className="text-xs text-gray-500 mt-1">Try switching tabs or resetting your search filter.</p>
+      ) : leads.length === 0 ? (
+        /* Empty Leads State for Newly Registered Vendor */
+        <div className="bg-white rounded-3xl border border-gray-200/90 shadow-soft p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-6">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-brand-100 to-purple-50 border border-brand-200 text-brand-900 flex items-center justify-center mx-auto shadow-inner">
+            <MessageSquare className="w-10 h-10 text-brand-800" />
           </div>
-        ) : (
-          filteredLeads.map((lead) => {
-            const statusStyle = statusColors[lead.status];
+
+          <div className="space-y-2">
+            <h2 className="font-serif text-2xl font-bold text-gray-900">
+              No Inquiries Received Yet
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
+              When customers browse your venue listings on the Event Spacing customer marketplace and request a date quote, their contact details and event specifications will appear here in real time.
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href="/venues/new"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-900 hover:bg-brand-950 text-white font-bold text-xs shadow-md transition-all"
+            >
+              <PlusCircle className="w-4 h-4 text-gold-400" />
+              <span>List a Venue to Get Leads</span>
+            </Link>
+            <Link
+              href="/venues"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-xs transition-colors"
+            >
+              <span>View My Venues</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      ) : filteredLeads.length === 0 ? (
+        /* Leads exist, but search / filter returned empty */
+        <div className="bg-white rounded-3xl p-12 text-center border border-gray-200/80 shadow-soft">
+          <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <h3 className="font-serif text-lg font-bold text-gray-700">No leads found</h3>
+          <p className="text-xs text-gray-500 mt-1">Try switching tabs or resetting your search filter.</p>
+          <button
+            onClick={() => {
+              setActiveTab("all");
+              setSearchQuery("");
+            }}
+            className="mt-4 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 transition-colors"
+          >
+            Reset Filters
+          </button>
+        </div>
+      ) : (
+        /* Render Lead Cards */
+        <div className="space-y-4">
+          {filteredLeads.map((lead) => {
+            const statusStyle = statusColors[lead.status] || {
+              bg: "bg-gray-100",
+              text: "text-gray-700",
+              border: "border-gray-200",
+            };
 
             return (
               <div
@@ -175,7 +243,7 @@ export default function VendorLeadsPage() {
                       >
                         {lead.status}
                       </span>
-                      <span className="text-[11px] text-gray-400">• Received {lead.createdAt}</span>
+                      <span className="text-[11px] text-gray-400">• Received {lead.createdAt?.slice(0, 10) || "Today"}</span>
                     </div>
 
                     <div className="text-xs text-gray-500 flex items-center gap-2">
@@ -195,7 +263,7 @@ export default function VendorLeadsPage() {
                     </a>
 
                     <a
-                      href={`https://wa.me/${lead.customerPhone.replace(/[^0-9]/g, "")}`}
+                      href={`https://wa.me/${(lead.customerPhone || "").replace(/[^0-9]/g, "")}`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition-colors"
@@ -274,14 +342,14 @@ export default function VendorLeadsPage() {
                   </div>
 
                   <span className="text-[11px] text-gray-400">
-                    Last updated: {lead.updatedAt}
+                    Last updated: {lead.updatedAt ? lead.updatedAt.slice(0, 10) : "Just now"}
                   </span>
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }
