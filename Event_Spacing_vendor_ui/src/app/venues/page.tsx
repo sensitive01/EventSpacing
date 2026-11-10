@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -19,17 +19,42 @@ import {
   Sparkles,
   ArrowRight,
 } from "lucide-react";
-import { vendorVenuesList } from "@/data/mockVendorData";
+import { vendorVenuesList as fallbackVenues } from "@/data/mockVendorData";
+import { api } from "@/lib/api";
 
 export default function VendorVenuesPage() {
+  const [venues, setVenues] = useState<any[]>(fallbackVenues);
   const [filterStatus, setFilterStatus] = useState<"all" | "live" | "under_review" | "draft">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredVenues = vendorVenuesList.filter((venue) => {
-    const matchesFilter = filterStatus === "all" || venue.status === filterStatus;
+  useEffect(() => {
+    let isMounted = true;
+    const fetchVenues = async () => {
+      try {
+        const res = await api.vendor.getVenues();
+        if (isMounted && res?.data && res.data.length > 0) {
+          setVenues(res.data);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn("Could not fetch vendor venues, using mock fallback:", err);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchVenues();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredVenues = venues.filter((venue) => {
+    const status = venue.status || "live";
+    const matchesFilter = filterStatus === "all" || status === filterStatus;
     const matchesQuery =
-      venue.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      venue.location.locality.toLowerCase().includes(searchQuery.toLowerCase());
+      (venue.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (venue.location?.locality || "").toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesQuery;
   });
 
@@ -59,21 +84,21 @@ export default function VendorVenuesPage() {
         {/* Status Chips */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           {[
-            { id: "all", label: "All Venues", count: vendorVenuesList.length },
+            { id: "all", label: "All Venues", count: venues.length },
             {
               id: "live",
               label: "Live & Approved",
-              count: vendorVenuesList.filter((v) => v.status === "live").length,
+              count: venues.filter((v) => (v.status || "live") === "live").length,
             },
             {
               id: "under_review",
               label: "Under Review",
-              count: vendorVenuesList.filter((v) => v.status === "under_review").length,
+              count: venues.filter((v) => v.status === "under_review").length,
             },
             {
               id: "draft",
               label: "Drafts",
-              count: vendorVenuesList.filter((v) => v.status === "draft").length,
+              count: venues.filter((v) => v.status === "draft").length,
             },
           ].map((tab) => (
             <button

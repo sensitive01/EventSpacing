@@ -56,6 +56,7 @@ export const register = async (
           phone: user.phone,
           role: user.role,
           companyName: user.companyName,
+          businessName: user.businessName || user.companyName,
         },
       },
     });
@@ -117,6 +118,7 @@ export const login = async (
           phone: user.phone,
           role: user.role,
           companyName: user.companyName,
+          businessName: user.businessName || user.companyName,
         },
       },
     });
@@ -172,16 +174,18 @@ export const verifyOtp = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { phone, otp, name } = req.body;
+    const { phone, otp, name, role, businessName } = req.body;
 
     let user = await User.findOne({ phone }).select("+otpCode +otpExpiresAt");
 
-    // Allow master dev bypass code 123456 in non-production environments
-    if (otp === "123456" && process.env.NODE_ENV !== "production") {
+    // Allow master dev bypass codes (123456 or vendor demo 481920) in non-production environments
+    if ((otp === "123456" || otp === "481920") && process.env.NODE_ENV !== "production") {
       if (!user) {
         user = new User({
-          name: name || `Guest (${phone.slice(-4)})`,
+          name: name || (role === "vendor" ? "Vikramaditya Rao" : `Guest (${phone.slice(-4)})`),
           phone,
+          role: role || "organizer",
+          businessName: businessName || (role === "vendor" ? "Prestige Hospitality & Banquets" : undefined),
           isPhoneVerified: true,
         });
       }
@@ -233,6 +237,8 @@ export const verifyOtp = async (
           email: user.email,
           phone: user.phone,
           role: user.role,
+          companyName: user.companyName,
+          businessName: user.businessName || user.companyName,
         },
       },
     });
@@ -261,6 +267,7 @@ export const getMe = async (
         phone: req.user.phone,
         role: req.user.role,
         companyName: req.user.companyName,
+        businessName: req.user.businessName || req.user.companyName,
         avatarUrl: req.user.avatarUrl,
         isPhoneVerified: req.user.isPhoneVerified,
         isEmailVerified: req.user.isEmailVerified,

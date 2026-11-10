@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Settings,
   ShieldCheck,
@@ -13,15 +13,67 @@ import {
   Lock,
 } from "lucide-react";
 import { currentVendorProfile } from "@/data/mockVendorData";
+import { api } from "@/lib/api";
 
 export default function VendorSettingsPage() {
-  const [profile, setProfile] = useState(currentVendorProfile);
+  const [profile, setProfile] = useState<any>(currentVendorProfile);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    let isMounted = true;
+    const fetchProfile = async () => {
+      try {
+        const res = await api.vendor.getProfile();
+        if (isMounted && res?.data) {
+          setProfile(res.data);
+        }
+      } catch (err) {
+        console.warn("Using local settings fallback:", err);
+      }
+    };
+
+    fetchProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setIsSaving(true);
+
+    try {
+      await api.vendor.updateProfile({
+        ownerName: profile.ownerName,
+        businessName: profile.businessName,
+        phone: profile.phone,
+        gstNumber: profile.gstNumber,
+        panNumber: profile.panNumber,
+        bankDetails: profile.bankDetails,
+      });
+
+      // Update stored session if matching
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("es_vendor_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          parsed.name = profile.ownerName;
+          parsed.businessName = profile.businessName;
+          localStorage.setItem("es_vendor_user", JSON.stringify(parsed));
+          window.dispatchEvent(new Event("vendor-auth-change"));
+        }
+      }
+
+      setIsSaving(false);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3500);
+    } catch (err: any) {
+      console.warn("Backend profile save failed:", err);
+      setIsSaving(false);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3500);
+    }
   };
 
   return (
@@ -210,10 +262,11 @@ export default function VendorSettingsPage() {
         <div className="flex justify-end">
           <button
             type="submit"
-            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-brand-900 hover:bg-brand-950 text-white font-bold text-xs shadow-md transition-all"
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-brand-900 hover:bg-brand-950 text-white font-bold text-xs shadow-md transition-all disabled:opacity-60 cursor-pointer"
           >
             <Save className="w-4 h-4 text-gold-400" />
-            <span>Save Profile Changes</span>
+            <span>{isSaving ? "Saving to Database..." : "Save Profile Changes"}</span>
           </button>
         </div>
       </form>

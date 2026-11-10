@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Building2,
@@ -30,15 +30,59 @@ interface VendorLayoutProps {
 
 export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeVenueDropdown, setActiveVenueDropdown] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState("The Royal Crystal Palace");
+  const [vendorUser, setVendorUser] = useState<any>(null);
+
+  // Sync current authenticated vendor session from localStorage
+  useEffect(() => {
+    const syncVendor = () => {
+      try {
+        const stored = localStorage.getItem("es_vendor_user");
+        if (stored) {
+          setVendorUser(JSON.parse(stored));
+        } else {
+          setVendorUser(null);
+        }
+      } catch {
+        setVendorUser(null);
+      }
+    };
+
+    syncVendor();
+    window.addEventListener("vendor-auth-change", syncVendor);
+    window.addEventListener("storage", syncVendor);
+    return () => {
+      window.removeEventListener("vendor-auth-change", syncVendor);
+      window.removeEventListener("storage", syncVendor);
+    };
+  }, [pathname]);
+
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("es_vendor_token");
+      localStorage.removeItem("es_vendor_user");
+      window.dispatchEvent(new Event("vendor-auth-change"));
+    }
+    router.push("/signin");
+  };
+
+  const displayName = vendorUser?.name || currentVendorProfile.ownerName;
+  const initials = displayName
+    .split(" ")
+    .map((w: string) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "VR";
 
   const navigationItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "My Venues", href: "/venues", icon: Building2 },
     { name: "Add New Venue", href: "/venues/new", icon: PlusCircle, isHighlight: true },
-    { name: "Leads & Inquiries", href: "/leads", icon: MessageSquare, badge: "3 New" },
+    { name: "Leads & Inquiries", href: "/leads", icon: MessageSquare, badge: "4 Leads" },
     { name: "Availability Calendar", href: "/calendar", icon: CalendarDays },
     { name: "Payouts & Finance", href: "/payouts", icon: Wallet },
     { name: "Business Settings", href: "/settings", icon: Settings },
@@ -223,18 +267,28 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
 
             <div className="h-6 w-px bg-gray-200"></div>
 
-            <Link
-              href="/signin"
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-              title="Click to view sign in or switch account"
-            >
-              <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-900 font-bold text-xs flex items-center justify-center">
-                VR
-              </div>
-              <span className="hidden sm:block text-xs font-semibold text-gray-800">
-                Vikramaditya
-              </span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/settings"
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                title="Account Settings"
+              >
+                <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-900 font-bold text-xs flex items-center justify-center">
+                  {initials}
+                </div>
+                <span className="hidden sm:block text-xs font-semibold text-gray-800">
+                  {displayName}
+                </span>
+              </Link>
+
+              <button
+                onClick={handleLogout}
+                className="p-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors ml-1"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </header>
 

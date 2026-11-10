@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MessageSquare,
   Phone,
@@ -20,12 +20,36 @@ import {
 } from "lucide-react";
 import { vendorLeadsList as initialLeads } from "@/data/mockVendorData";
 import { VendorLead, LeadStatus } from "@/types/vendor";
+import { api } from "@/lib/api";
 
 export default function VendorLeadsPage() {
   const [leads, setLeads] = useState<VendorLead[]>(initialLeads);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedLead, setSelectedLead] = useState<VendorLead | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch real inquiries from MongoDB Atlas
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLeads = async () => {
+      try {
+        const res = await api.vendor.getLeads();
+        if (isMounted && res?.data && res.data.length > 0) {
+          setLeads(res.data);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn("Could not fetch live leads, using fallback:", err);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchLeads();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const statusColors: Record<LeadStatus, { bg: string; text: string; border: string }> = {
     new: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
@@ -35,10 +59,17 @@ export default function VendorLeadsPage() {
     declined: { bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-200" },
   };
 
-  const updateLeadStatus = (leadId: string, newStatus: LeadStatus) => {
+  const updateLeadStatus = async (leadId: string, newStatus: LeadStatus) => {
+    // Optimistic UI update
     setLeads((prev) =>
       prev.map((l) => (l.id === leadId ? { ...l, status: newStatus, updatedAt: "Just now" } : l))
     );
+
+    try {
+      await api.vendor.updateLeadStatus(leadId, newStatus);
+    } catch (err) {
+      console.warn("Backend lead status update failed:", err);
+    }
   };
 
   const filteredLeads = leads.filter((lead) => {

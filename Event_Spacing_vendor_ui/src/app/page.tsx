@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Building2,
@@ -19,15 +19,73 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
-  vendorVenuesList,
-  vendorLeadsList,
+  vendorVenuesList as fallbackVenues,
+  vendorLeadsList as fallbackLeads,
   currentVendorProfile,
   mockCalendarDates,
 } from "@/data/mockVendorData";
+import { api } from "@/lib/api";
 
 export default function VendorDashboardPage() {
-  const activeVenues = vendorVenuesList.filter((v) => v.status === "live");
-  const underReviewVenue = vendorVenuesList.find((v) => v.status === "under_review");
+  const [venues, setVenues] = useState<any[]>(fallbackVenues);
+  const [leads, setLeads] = useState<any[]>(fallbackLeads);
+  const [stats, setStats] = useState({
+    totalVenues: 3,
+    activeVenues: 2,
+    totalLeads: 42,
+    newLeads: 3,
+    monthlyEarnings: 825000,
+    bookingConversionRate: "28.5%",
+  });
+  const [ownerName, setOwnerName] = useState(currentVendorProfile.ownerName);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load live data from backend API
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboardData = async () => {
+      try {
+        const storedUser = localStorage.getItem("es_vendor_user");
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            if (parsed.name) setOwnerName(parsed.name);
+          } catch {}
+        }
+
+        const [statsRes, venuesRes, leadsRes] = await Promise.allSettled([
+          api.vendor.getStats(),
+          api.vendor.getVenues(),
+          api.vendor.getLeads(),
+        ]);
+
+        if (isMounted) {
+          if (statsRes.status === "fulfilled" && statsRes.value?.data) {
+            setStats(statsRes.value.data);
+          }
+          if (venuesRes.status === "fulfilled" && venuesRes.value?.data) {
+            setVenues(venuesRes.value.data);
+          }
+          if (leadsRes.status === "fulfilled" && leadsRes.value?.data) {
+            setLeads(leadsRes.value.data);
+          }
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn("Could not fetch live dashboard stats, using local fallback:", err);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadDashboardData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const activeVenues = venues.filter((v) => v.status === "live");
+  const underReviewVenue = venues.find((v) => v.status === "under_review");
 
   return (
     <div className="space-y-8">
@@ -37,13 +95,13 @@ export default function VendorDashboardPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/20 border border-gold-400/40 text-gold-300 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Partner Performance Hub</span>
+              <span>Partner Performance Hub &bull; MongoDB Atlas Live</span>
             </div>
             <h1 className="font-serif text-2xl sm:text-4xl font-bold tracking-tight">
-              Welcome back, {currentVendorProfile.ownerName}
+              Welcome back, {ownerName}
             </h1>
             <p className="text-xs sm:text-sm text-gray-300 max-w-xl">
-              You have <strong className="text-gold-300">3 new inquiries</strong> today for upcoming wedding dates. Keep your calendar dates updated to increase booking conversion.
+              You have <strong className="text-gold-300">{stats.newLeads} new inquiries</strong> today for upcoming wedding dates. Keep your calendar dates updated to increase booking conversion.
             </p>
           </div>
 
@@ -81,7 +139,7 @@ export default function VendorDashboardPage() {
                 Verification in Progress: &ldquo;{underReviewVenue.name}&rdquo;
               </p>
               <p className="text-[11px] text-amber-700">
-                Submitted 18 hours ago. Our admin operations team is verifying the floor plans and municipal NOC documents.
+                Submitted recently. Our admin operations team is verifying the floor plans and municipal NOC documents.
               </p>
             </div>
           </div>
@@ -113,13 +171,13 @@ export default function VendorDashboardPage() {
 
         <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Inquiries This Month</span>
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Inquiries Active</span>
             <div className="w-9 h-9 rounded-xl bg-gold-50 text-gold-700 flex items-center justify-center">
               <Users className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-bold text-gray-900">71</div>
+            <div className="text-2xl font-bold text-gray-900">{stats.totalLeads}</div>
             <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5" /> +24% vs last month
             </p>
@@ -136,7 +194,7 @@ export default function VendorDashboardPage() {
           <div className="mt-3">
             <div className="text-2xl font-bold text-gray-900">18</div>
             <p className="text-[11px] text-gray-500 font-medium mt-1">
-              Avg conversion: <strong className="text-brand-900">68%</strong>
+              Avg conversion: <strong className="text-brand-900">{stats.bookingConversionRate || "68%"}</strong>
             </p>
           </div>
         </div>
@@ -149,7 +207,7 @@ export default function VendorDashboardPage() {
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-bold text-gray-900">₹8,25,000</div>
+            <div className="text-2xl font-bold text-gray-900">₹{stats.monthlyEarnings.toLocaleString("en-IN")}</div>
             <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
               <ArrowUpRight className="w-3.5 h-3.5" /> Next payout in 3 days
             </p>
@@ -164,28 +222,29 @@ export default function VendorDashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-serif text-lg font-bold text-gray-900">Recent Customer Inquiries</h2>
-              <p className="text-xs text-gray-500">Customer requests directly routed to your property coordinators</p>
+              <p className="text-xs text-gray-500">Live requests from customer portal</p>
             </div>
             <Link
               href="/leads"
               className="text-xs font-bold text-brand-800 hover:text-brand-950 flex items-center gap-1"
             >
-              View All (5) &rarr;
+              View All ({leads.length}) &rarr;
             </Link>
           </div>
 
           <div className="divide-y divide-gray-100">
-            {vendorLeadsList.slice(0, 4).map((lead) => {
-              const statusColors = {
+            {leads.slice(0, 4).map((lead: any) => {
+              const statusColorsMap: Record<string, string> = {
                 new: "bg-emerald-100 text-emerald-800 border-emerald-200",
                 contacted: "bg-blue-100 text-blue-800 border-blue-200",
                 visited: "bg-purple-100 text-purple-800 border-purple-200",
                 booked: "bg-gold-100 text-gold-900 border-gold-300 font-bold",
                 declined: "bg-gray-100 text-gray-600 border-gray-200",
-              }[lead.status];
+              };
+              const statusColors = statusColorsMap[lead.status as string] || "bg-gray-100 text-gray-700 border-gray-200";
 
               return (
-                <div key={lead.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div key={lead.id || lead._id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm text-gray-900">{lead.customerName}</span>
@@ -210,7 +269,7 @@ export default function VendorDashboardPage() {
                       <Phone className="w-3.5 h-3.5" />
                     </a>
                     <a
-                      href={`https://wa.me/${lead.customerPhone.replace(/[^0-9]/g, "")}`}
+                      href={`https://wa.me/${(lead.customerPhone || "").replace(/[^0-9]/g, "")}`}
                       target="_blank"
                       rel="noreferrer"
                       className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors"

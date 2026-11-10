@@ -15,7 +15,15 @@ export interface IInquiry extends Document {
   vendorId?: mongoose.Types.ObjectId;
   vendorName?: string;
   companyName?: string;
-  status: "new" | "contacted" | "in_discussion" | "converted" | "closed";
+  status:
+    | "new"
+    | "contacted"
+    | "visited"
+    | "booked"
+    | "declined"
+    | "in_discussion"
+    | "converted"
+    | "closed";
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -45,7 +53,16 @@ const InquirySchema = new Schema<IInquiry>(
     companyName: { type: String },
     status: {
       type: String,
-      enum: ["new", "contacted", "in_discussion", "converted", "closed"],
+      enum: [
+        "new",
+        "contacted",
+        "visited",
+        "booked",
+        "declined",
+        "in_discussion",
+        "converted",
+        "closed",
+      ],
       default: "new",
       index: true,
     },

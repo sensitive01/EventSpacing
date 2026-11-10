@@ -5,8 +5,9 @@ export const registerSchema = z.object({
   email: z.string().email("Invalid email address").optional(),
   phone: z.string().min(10, "Phone number must be at least 10 digits").optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["organizer", "vendor"]).default("organizer"),
+  role: z.enum(["organizer", "vendor", "admin"]).default("organizer"),
   companyName: z.string().optional(),
+  businessName: z.string().optional(),
 });
 
 export const loginSchema = z.object({
@@ -23,6 +24,8 @@ export const verifyOtpSchema = z.object({
   phone: z.string().min(10, "Phone number must be at least 10 digits"),
   otp: z.string().length(6, "OTP must be exactly 6 digits"),
   name: z.string().optional(),
+  role: z.enum(["organizer", "vendor", "admin"]).optional(),
+  businessName: z.string().optional(),
 });
 
 export const updateProfileSchema = z.object({

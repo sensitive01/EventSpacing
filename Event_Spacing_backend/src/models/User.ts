@@ -10,6 +10,16 @@ export interface IUser extends Document {
   password?: string;
   role: "organizer" | "vendor" | "admin";
   companyName?: string;
+  businessName?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  bankDetails?: {
+    accountNumber?: string;
+    ifscCode?: string;
+    accountHolder?: string;
+    bankName?: string;
+  };
+  kycStatus?: "verified" | "pending" | "rejected";
   avatarUrl?: string;
   isPhoneVerified: boolean;
   isEmailVerified: boolean;
@@ -52,6 +62,29 @@ const UserSchema = new Schema<IUser>(
     companyName: {
       type: String,
       trim: true,
+    },
+    businessName: {
+      type: String,
+      trim: true,
+    },
+    gstNumber: {
+      type: String,
+      trim: true,
+    },
+    panNumber: {
+      type: String,
+      trim: true,
+    },
+    bankDetails: {
+      accountNumber: { type: String, trim: true },
+      ifscCode: { type: String, trim: true },
+      accountHolder: { type: String, trim: true },
+      bankName: { type: String, trim: true },
+    },
+    kycStatus: {
+      type: String,
+      enum: ["verified", "pending", "rejected"],
+      default: "verified",
     },
     avatarUrl: {
       type: String,

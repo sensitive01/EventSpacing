@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -17,13 +17,44 @@ import {
 } from "lucide-react";
 import { mockCalendarDates as initialDates, vendorVenuesList } from "@/data/mockVendorData";
 import { DateAvailability, SlotStatus } from "@/types/vendor";
+import { api } from "@/lib/api";
 
 export default function VendorCalendarPage() {
+  const [venues, setVenues] = useState<any[]>(vendorVenuesList);
   const [selectedVenue, setSelectedVenue] = useState(vendorVenuesList[0].id);
   const [calendarDates, setCalendarDates] = useState<DateAvailability[]>(initialDates);
   const [selectedDateModal, setSelectedDateModal] = useState<string | null>(null);
   const [actionReason, setActionReason] = useState("");
   const [surgeActive, setSurgeActive] = useState(false);
+
+  // Fetch live venues and calendar slots from backend
+  useEffect(() => {
+    let isMounted = true;
+    const loadCalendar = async () => {
+      try {
+        const [venuesRes, calRes] = await Promise.allSettled([
+          api.vendor.getVenues(),
+          api.vendor.getCalendar(selectedVenue),
+        ]);
+
+        if (isMounted) {
+          if (venuesRes.status === "fulfilled" && venuesRes.value?.data?.length > 0) {
+            setVenues(venuesRes.value.data);
+          }
+          if (calRes.status === "fulfilled" && calRes.value?.data?.length > 0) {
+            setCalendarDates(calRes.value.data);
+          }
+        }
+      } catch (err) {
+        console.warn("Using local calendar fallback:", err);
+      }
+    };
+
+    loadCalendar();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedVenue]);
 
   // Month navigation (November 2026 for demo context)
   const currentMonthName = "November 2026";
@@ -41,11 +72,14 @@ export default function VendorCalendarPage() {
     setSelectedDateModal(`2026-11-${dayStr}`);
   };
 
-  const toggleBlockDate = (dateStr: string, currentStatus?: SlotStatus) => {
+  const toggleBlockDate = async (dateStr: string, currentStatus?: SlotStatus) => {
+    const existing = calendarDates.find((d) => d.date === dateStr);
+    const targetStatus = existing?.status === "blocked" ? "available" : "blocked";
+
     setCalendarDates((prev) => {
-      const existing = prev.find((d) => d.date === dateStr);
-      if (existing) {
-        if (existing.status === "booked") {
+      const exists = prev.find((d) => d.date === dateStr);
+      if (exists) {
+        if (exists.status === "booked") {
           alert("Cannot modify a confirmed booking date directly. Please contact support or the customer.");
           return prev;
         }
@@ -53,8 +87,8 @@ export default function VendorCalendarPage() {
           d.date === dateStr
             ? {
                 ...d,
-                status: d.status === "blocked" ? "available" : "blocked",
-                notes: d.status === "blocked" ? undefined : actionReason || "Vendor maintenance block",
+                status: targetStatus as SlotStatus,
+                notes: targetStatus === "blocked" ? actionReason || "Vendor maintenance block" : undefined,
               }
             : d
         );
@@ -69,11 +103,23 @@ export default function VendorCalendarPage() {
         ];
       }
     });
+
+    try {
+      await api.vendor.toggleDateBlock({
+        venueId: selectedVenue,
+        date: dateStr,
+        status: targetStatus,
+        notes: actionReason || "Vendor slot update",
+      });
+    } catch (err) {
+      console.warn("Backend slot update failed:", err);
+    }
+
     setSelectedDateModal(null);
     setActionReason("");
   };
 
-  const activeVenueData = vendorVenuesList.find((v) => v.id === selectedVenue) || vendorVenuesList[0];
+  const activeVenueData = venues.find((v) => v.id === selectedVenue || v._id === selectedVenue) || venues[0] || vendorVenuesList[0];
   const activeDateInfo = selectedDateModal ? calendarDates.find((d) => d.date === selectedDateModal) : null;
 
   return (

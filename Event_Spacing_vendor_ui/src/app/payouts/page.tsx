@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Wallet,
   IndianRupee,
@@ -13,12 +13,48 @@ import {
   FileText,
   ShieldCheck,
 } from "lucide-react";
-import { mockPayouts, currentVendorProfile } from "@/data/mockVendorData";
+import { mockPayouts as initialPayouts, currentVendorProfile } from "@/data/mockVendorData";
+import { api } from "@/lib/api";
 
 export default function VendorPayoutsPage() {
-  const totalGross = mockPayouts.reduce((acc, p) => acc + p.grossAmount, 0);
-  const totalCommission = mockPayouts.reduce((acc, p) => acc + p.platformFeeAmount, 0);
-  const totalNet = mockPayouts.reduce((acc, p) => acc + p.netPayout, 0);
+  const [payouts, setPayouts] = useState<any[]>(initialPayouts);
+  const [profile, setProfile] = useState<any>(currentVendorProfile);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPayoutsData = async () => {
+      try {
+        const [payoutsRes, profileRes] = await Promise.allSettled([
+          api.vendor.getPayouts(),
+          api.vendor.getProfile(),
+        ]);
+
+        if (isMounted) {
+          if (payoutsRes.status === "fulfilled" && payoutsRes.value?.data?.length > 0) {
+            setPayouts(payoutsRes.value.data);
+          }
+          if (profileRes.status === "fulfilled" && profileRes.value?.data) {
+            setProfile(profileRes.value.data);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load backend payouts, using fallback:", err);
+      }
+    };
+
+    fetchPayoutsData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const totalGross = payouts.reduce((acc, p) => acc + (p.grossAmount || 0), 0);
+  const totalCommission = payouts.reduce((acc, p) => acc + (p.platformFeeAmount || 0), 0);
+  const totalNet = payouts.reduce((acc, p) => acc + (p.netPayout || 0), 0);
+
+  const bankName = profile?.bankDetails?.bankName || currentVendorProfile.bankDetails.bankName;
+  const accountNumber = profile?.bankDetails?.accountNumber || currentVendorProfile.bankDetails.accountNumber;
+  const ifscCode = profile?.bankDetails?.ifscCode || currentVendorProfile.bankDetails.ifscCode;
 
   return (
     <div className="space-y-8">
@@ -39,10 +75,10 @@ export default function VendorPayoutsPage() {
           </div>
           <div className="text-xs">
             <div className="flex items-center gap-1">
-              <span className="font-bold text-gray-900">{currentVendorProfile.bankDetails.bankName}</span>
+              <span className="font-bold text-gray-900">{bankName}</span>
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             </div>
-            <span className="text-gray-500">A/C: •••• {currentVendorProfile.bankDetails.accountNumber.slice(-4)} (IFSC: {currentVendorProfile.bankDetails.ifscCode})</span>
+            <span className="text-gray-500">A/C: •••• {accountNumber.slice(-4)} (IFSC: {ifscCode})</span>
           </div>
         </div>
       </div>
@@ -111,7 +147,7 @@ export default function VendorPayoutsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs">
-              {mockPayouts.map((p) => {
+              {payouts.map((p: any) => {
                 const isPaid = p.status === "paid";
                 const isProcessing = p.status === "processing";
 

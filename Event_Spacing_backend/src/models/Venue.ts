@@ -83,6 +83,8 @@ export interface IVenue extends Document {
   detailedDescription?: string;
   isVerified: boolean;
   isActive: boolean;
+  vendorId?: mongoose.Types.ObjectId;
+  status?: "live" | "under_review" | "draft";
   cateringPolicy?: "in_house_only" | "outside_allowed" | "both_available";
   decorationPolicy?: "in_house_only" | "outside_allowed" | "both_available";
   createdAt: Date;
@@ -184,6 +186,13 @@ const VenueSchema = new Schema<IVenue>(
     detailedDescription: { type: String },
     isVerified: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },
+    vendorId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    status: {
+      type: String,
+      enum: ["live", "under_review", "draft"],
+      default: "live",
+      index: true,
+    },
     cateringPolicy: {
       type: String,
       enum: ["in_house_only", "outside_allowed", "both_available"],
