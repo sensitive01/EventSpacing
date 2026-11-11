@@ -6,7 +6,10 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from "axios";
 
 const rawUrl =
-  process.env.NEXT_PUBLIC_API_URL || "https://eventspacing.onrender.com/api";
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:5000/api"
+    : "https://eventspacing.onrender.com/api");
 const API_BASE_URL = rawUrl.endsWith("/api")
   ? rawUrl
   : `${rawUrl.replace(/\/$/, "")}/api`;
@@ -16,7 +19,7 @@ const API_BASE_URL = rawUrl.endsWith("/api")
  */
 export const httpClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -96,6 +99,9 @@ export const api = {
 
     getBySlug: (slugOrId: string): Promise<any> =>
       httpClient.get(`/venues/${slugOrId}`),
+
+    getBookedSlots: (slugOrId: string): Promise<any> =>
+      httpClient.get(`/venues/${slugOrId}/booked-slots`),
 
     inquire: (
       venueId: string,

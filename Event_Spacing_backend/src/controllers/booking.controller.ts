@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { Booking } from "../models/Booking";
 import { Venue } from "../models/Venue";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
+import { venueCalendarOverrides } from "./vendorPortal.controller";
 
 export const createBooking = async (
   req: AuthenticatedRequest,
@@ -21,6 +23,8 @@ export const createBooking = async (
       customerPhone,
       customerEmail,
       specialRequests,
+      transactionId,
+      paymentMethod,
     } = req.body;
 
     const venue = await Venue.findById(venueId);
@@ -28,6 +32,46 @@ export const createBooking = async (
       res.status(404).json({
         success: false,
         message: "Venue not found.",
+      });
+      return;
+    }
+
+    // 1. Resolve Target Space & Perform Atomic Slot Conflict Check
+    const targetSpace = selectedSpaceName || venue.spaces?.[0]?.name || "Main Banquet Hall";
+
+    let slotConflictCondition: any = {};
+    if (timeSlot === "Full Day (8 AM - 11 PM)") {
+      slotConflictCondition = {
+        $in: [
+          "Full Day (8 AM - 11 PM)",
+          "Morning Slot (8 AM - 3 PM)",
+          "Evening Slot (4 PM - 11 PM)",
+        ],
+      };
+    } else {
+      slotConflictCondition = {
+        $in: ["Full Day (8 AM - 11 PM)", timeSlot],
+      };
+    }
+
+    const existingConflict = await Booking.findOne({
+      venueId: venue._id,
+      selectedSpaceName: targetSpace,
+      eventDate: eventDate,
+      timeSlot: slotConflictCondition,
+      status: { $in: ["confirmed", "completed"] },
+    });
+
+    if (existingConflict) {
+      res.status(409).json({
+        success: false,
+        message: `Slot Conflict: "${targetSpace}" is already booked for ${existingConflict.timeSlot} on ${eventDate}. Please choose an alternative slot, hall, or date.`,
+        conflict: {
+          bookingRef: existingConflict.bookingRef,
+          spaceName: existingConflict.selectedSpaceName,
+          eventDate: existingConflict.eventDate,
+          timeSlot: existingConflict.timeSlot,
+        },
       });
       return;
     }
@@ -85,7 +129,32 @@ export const createBooking = async (
       customerPhone,
       customerEmail,
       specialRequests,
+      paymentDetails: {
+        transactionId: transactionId || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`,
+        paymentMethod: paymentMethod || "UPI",
+        paidAt: new Date(),
+        invoiceNumber: `INV-2026-${randomSuffix}`,
+      },
     });
+
+    // Automatically lock date slot in venue calendar
+    const venueKey = venue._id.toString();
+    if (!venueCalendarOverrides[venueKey]) {
+      venueCalendarOverrides[venueKey] = [];
+    }
+    const existingSlotIdx = venueCalendarOverrides[venueKey].findIndex((s) => s.date === eventDate);
+    const slotEntry = {
+      date: eventDate,
+      status: "booked",
+      bookedBy: customerName,
+      bookingRef,
+      notes: `Confirmed: ${packageTitle} (${guestCount} guests)`,
+    };
+    if (existingSlotIdx >= 0) {
+      venueCalendarOverrides[venueKey][existingSlotIdx] = slotEntry;
+    } else {
+      venueCalendarOverrides[venueKey].push(slotEntry);
+    }
 
     res.status(201).json({
       success: true,
@@ -139,8 +208,10 @@ export const getBookingById = async (
     let booking = null;
     if (id.startsWith("ES-")) {
       booking = await Booking.findOne({ bookingRef: id });
-    } else {
+    } else if (mongoose.isValidObjectId(id)) {
       booking = await Booking.findById(id);
+    } else {
+      booking = await Booking.findOne({ bookingRef: id });
     }
 
     if (!booking) {

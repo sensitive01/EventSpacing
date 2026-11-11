@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
 
 export interface IVendor extends Document {
+  vendorId?: mongoose.Types.ObjectId;
   businessName: string;
   ownerName: string;
   category: string;
@@ -22,6 +23,7 @@ export interface IVendor extends Document {
 
 const VendorSchema = new Schema<IVendor>(
   {
+    vendorId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     businessName: { type: String, required: true, trim: true },
     ownerName: { type: String, required: true, trim: true },
     category: { type: String, required: true, index: true },

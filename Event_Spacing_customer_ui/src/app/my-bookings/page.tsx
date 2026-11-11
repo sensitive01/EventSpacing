@@ -216,9 +216,12 @@ export default function CustomerBookingsPage() {
 
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-2 py-0.5 rounded-lg border border-brand-100">
+                          <Link
+                            href={`/my-bookings/${booking.id || booking.bookingRef}`}
+                            className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-2 py-0.5 rounded-lg border border-brand-100 hover:bg-brand-100 transition-colors"
+                          >
                             {booking.bookingRef}
-                          </span>
+                          </Link>
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                               isConfirmed
@@ -305,17 +308,13 @@ export default function CustomerBookingsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          alert(
-                            `Downloading digital GST invoice PDF for booking reference ${booking.bookingRef}. GSTIN: 29AABCP1234F1Z8.`
-                          )
-                        }
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                      <Link
+                        href={`/my-bookings/${booking.id || booking.bookingRef}`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-semibold shadow-2xs transition-colors"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Download Invoice PDF</span>
-                      </button>
+                      </Link>
 
                       {isConfirmed && (
                         <button
@@ -331,12 +330,12 @@ export default function CustomerBookingsPage() {
                         </button>
                       )}
 
-                      <button
-                        onClick={() => setSelectedBooking(booking)}
-                        className="px-5 py-2 rounded-xl bg-brand-900 hover:bg-brand-950 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                      <Link
+                        href={`/my-bookings/${booking.id || booking.bookingRef}`}
+                        className="px-5 py-2 rounded-xl bg-brand-900 hover:bg-brand-950 text-white text-xs font-semibold shadow-sm transition-colors text-center inline-block"
                       >
                         View Details
-                      </button>
+                      </Link>
                     </div>
                   </div>
                 </div>

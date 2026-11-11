@@ -30,6 +30,12 @@ export interface IBooking extends Document {
   customerPhone: string;
   customerEmail: string;
   specialRequests?: string;
+  paymentDetails?: {
+    transactionId?: string;
+    paymentMethod?: string;
+    paidAt?: Date;
+    invoiceNumber?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -99,6 +105,12 @@ const BookingSchema = new Schema<IBooking>(
     customerPhone: { type: String, required: true },
     customerEmail: { type: String, required: true },
     specialRequests: { type: String },
+    paymentDetails: {
+      transactionId: { type: String },
+      paymentMethod: { type: String, default: "UPI" },
+      paidAt: { type: Date, default: Date.now },
+      invoiceNumber: { type: String },
+    },
   },
   {
     timestamps: true,

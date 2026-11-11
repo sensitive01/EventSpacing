@@ -16,5 +16,7 @@ export const createBookingSchema = z.object({
   customerPhone: z.string().min(10, "Valid phone number required"),
   customerEmail: z.string().email("Valid email required"),
   specialRequests: z.string().optional(),
+  transactionId: z.string().optional(),
+  paymentMethod: z.string().optional(),
 });
 

@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   LogOut,
+  Store,
+  Star,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -33,9 +35,11 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeVenueDropdown, setActiveVenueDropdown] = useState(false);
+  const [addListingDropdown, setAddListingDropdown] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<string>("Loading workspace...");
   const [userVenues, setUserVenues] = useState<any[]>([]);
   const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
+  const [confirmedBookingsCount, setConfirmedBookingsCount] = useState<number>(0);
   const [vendorUser, setVendorUser] = useState<any>(null);
 
   // Sync current authenticated vendor session from localStorage and backend
@@ -66,8 +70,9 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
         ]);
 
         if (isMounted) {
-          if (venuesRes.status === "fulfilled" && Array.isArray(venuesRes.value?.data)) {
-            const fetched = venuesRes.value.data;
+          if (venuesRes.status === "fulfilled") {
+            const val = venuesRes.value;
+            const fetched = Array.isArray(val?.data) ? val.data : Array.isArray(val) ? val : [];
             setUserVenues(fetched);
             if (fetched.length > 0) {
               setSelectedVenue(fetched[0].name);
@@ -80,6 +85,7 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
 
           if (statsRes.status === "fulfilled" && statsRes.value?.data) {
             setNewLeadsCount(statsRes.value.data.newLeads || 0);
+            setConfirmedBookingsCount(statsRes.value.data.confirmedBookings || 0);
           }
         }
       } catch (err) {
@@ -121,10 +127,22 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
     .join("")
     .toUpperCase() || "EP";
 
-  const navigationItems = [
+  const navigationItems: Array<{
+    name: string;
+    href: string;
+    icon: any;
+    badge?: string;
+    isHighlight?: boolean;
+  }> = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "My Venues", href: "/venues", icon: Building2 },
-    { name: "Add New Venue", href: "/venues/new", icon: PlusCircle, isHighlight: true },
+    { name: "Marketplace Services", href: "/services", icon: Store },
+    {
+      name: "Bookings",
+      href: "/bookings",
+      icon: CheckCircle2,
+      badge: confirmedBookingsCount > 0 ? `${confirmedBookingsCount} Booked` : undefined,
+    },
     {
       name: "Leads & Inquiries",
       href: "/leads",
@@ -132,6 +150,7 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
       badge: newLeadsCount > 0 ? `${newLeadsCount} New` : undefined,
     },
     { name: "Availability Calendar", href: "/calendar", icon: CalendarDays },
+    { name: "Customer Reviews", href: "/reviews", icon: Star },
     { name: "Payouts & Finance", href: "/payouts", icon: Wallet },
     { name: "Business Settings", href: "/settings", icon: Settings },
   ];
@@ -319,13 +338,48 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
 
           {/* Right Header CTAs */}
           <div className="flex items-center gap-3 sm:gap-4">
-            <Link
-              href="/venues/new"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-900 hover:bg-brand-950 text-white text-xs font-semibold shadow-sm transition-colors"
-            >
-              <PlusCircle className="w-3.5 h-3.5 text-gold-400" />
-              <span>List New Venue</span>
-            </Link>
+            <div className="relative">
+              <button
+                onClick={() => setAddListingDropdown(!addListingDropdown)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-900 hover:bg-brand-950 text-white text-xs font-semibold shadow-sm transition-colors"
+              >
+                <PlusCircle className="w-3.5 h-3.5 text-gold-400" />
+                <span>Add Listing</span>
+                <ChevronDown className="w-3.5 h-3.5 text-gray-300 ml-0.5" />
+              </button>
+
+              {addListingDropdown && (
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-2xl shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <Link
+                    href="/venues/new"
+                    onClick={() => setAddListingDropdown(false)}
+                    className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-brand-50/60 text-gray-800 transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-900 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-brand-900 group-hover:text-gold-400 transition-colors">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold block text-gray-900">List a Venue</span>
+                      <span className="text-[10px] text-gray-500 block leading-tight">Banquet, lawn, resort, convention center</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/services/new"
+                    onClick={() => setAddListingDropdown(false)}
+                    className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-gold-50/60 text-gray-800 transition-colors group mt-1"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gold-100 text-gold-800 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-gold-500 group-hover:text-brand-950 transition-colors">
+                      <Store className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold block text-gray-900">List an Event Service</span>
+                      <span className="text-[10px] text-gray-500 block leading-tight">Catering, Photography, DJ, Decor & more</span>
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
 
             <Link
               href="/leads"

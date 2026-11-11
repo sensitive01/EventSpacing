@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { Venue } from "../models/Venue";
 import { Inquiry } from "../models/Inquiry";
+import { Booking } from "../models/Booking";
 
 export const getVenues = async (
   req: Request,
@@ -336,3 +337,65 @@ export const onboardVenue = async (
     next(error);
   }
 };
+
+/**
+ * Public Endpoint: Get all confirmed and completed booked slots for a venue
+ * Used by Customer UI to disable booked slots and prevent double bookings.
+ */
+export const getVenueBookedSlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const slugOrId = String(req.params.slugOrId || "");
+    let venue = null;
+    if (mongoose.Types.ObjectId.isValid(slugOrId)) {
+      venue = await Venue.findById(slugOrId);
+    }
+    if (!venue) {
+      venue = await Venue.findOne({ slug: slugOrId.toLowerCase() });
+    }
+
+    if (!venue) {
+      res.status(404).json({
+        success: false,
+        message: "Venue not found.",
+      });
+      return;
+    }
+
+    // Query all non-cancelled bookings for this venue
+    const bookings = await Booking.find({
+      venueId: venue._id,
+      status: { $in: ["confirmed", "completed"] },
+    }).select("eventDate timeSlot selectedSpaceName bookingRef -_id");
+
+    // Also include vendor-blocked maintenance dates from calendar overrides
+    let blockedSlots: any[] = [];
+    try {
+      const { venueCalendarOverrides } = await import("./vendorPortal.controller");
+      blockedSlots = (venueCalendarOverrides[String(venue._id)] || [])
+        .filter((s: any) => s.status === "blocked")
+        .map((s: any) => ({
+          eventDate: s.date,
+          timeSlot: "Full Day (8 AM - 11 PM)",
+          selectedSpaceName: "All Spaces (Maintenance)",
+          bookingRef: "MAINTENANCE-BLOCKED",
+        }));
+    } catch {
+      // Ignore if unavailable
+    }
+
+    const combinedSlots = [...bookings, ...blockedSlots];
+
+    res.status(200).json({
+      success: true,
+      count: combinedSlots.length,
+      data: combinedSlots,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

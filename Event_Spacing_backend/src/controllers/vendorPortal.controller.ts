@@ -4,11 +4,12 @@ import jwt from "jsonwebtoken";
 import { config } from "../config/env";
 import { User, IUser } from "../models/User";
 import { Venue, IVenue } from "../models/Venue";
+import { Vendor, IVendor } from "../models/Vendor";
 import { Inquiry } from "../models/Inquiry";
 import { Booking } from "../models/Booking";
 
 // In-memory slot storage for dynamic calendar slot blocking if no separate collection
-const venueCalendarOverrides: Record<string, any[]> = {};
+export const venueCalendarOverrides: Record<string, any[]> = {};
 
 /**
  * Helper to reliably resolve vendor partner identity across JWT tokens, custom headers, and query parameters.
@@ -83,11 +84,11 @@ export const getVendorProfile = async (
         phone: user?.phone || "",
         gstNumber: user?.gstNumber || "",
         panNumber: user?.panNumber || "",
-        bankDetails: user?.bankDetails || {
-          accountNumber: "",
-          ifscCode: "",
-          accountHolder: user?.businessName || user?.name || "",
-          bankName: "",
+        bankDetails: {
+          accountNumber: user?.bankDetails?.accountNumber || "",
+          ifscCode: user?.bankDetails?.ifscCode || "",
+          accountHolder: user?.bankDetails?.accountHolder || user?.businessName || user?.name || "",
+          bankName: user?.bankDetails?.bankName || "",
         },
         kycStatus: user?.kycStatus || (totalVenues > 0 ? "verified" : "pending"),
         totalVenues,
@@ -199,6 +200,10 @@ export const getVendorStats = async (
     });
 
     const activeVenues = venues.filter((v) => v.status === "live" || v.isActive);
+    const confirmedBookings = await Booking.countDocuments({
+      venueId: { $in: venueIds },
+      status: { $ne: "cancelled" },
+    });
     const monthlyEarnings = venues.reduce((acc, v) => acc + (v.pricing?.pricePerDay || 100000) * 2, 0);
 
     res.status(200).json({
@@ -208,8 +213,9 @@ export const getVendorStats = async (
         activeVenues: activeVenues.length,
         totalLeads,
         newLeads,
+        confirmedBookings,
         monthlyEarnings,
-        bookingConversionRate: totalLeads > 0 ? `${Math.min(35, Math.round((2 / totalLeads) * 100))}%` : "0%",
+        bookingConversionRate: totalLeads > 0 ? `${Math.min(100, Math.round((confirmedBookings / totalLeads) * 100))}%` : "0%",
       },
     });
   } catch (error) {
@@ -692,8 +698,7 @@ export const getVendorCalendar = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const userId = (req as any).user?.id || (req as any).user?._id;
-    const user = await User.findById(userId);
+    const user = await resolveVendorUser(req);
 
     const venues = user
       ? await Venue.find({
@@ -704,33 +709,41 @@ export const getVendorCalendar = async (
         })
       : [];
 
-    // If new vendor has 0 venues, return empty calendar list
-    if (venues.length === 0) {
+    const { venueId = "default" } = req.query;
+    const targetVenueId = venueId && venueId !== "default" ? venueId : venues[0]?._id;
+
+    // If new vendor has 0 venues and no targetVenueId, return empty calendar list
+    if (!targetVenueId && venues.length === 0) {
       res.status(200).json({
         success: true,
         data: [],
       });
       return;
     }
+    const customSlots = venueCalendarOverrides[String(targetVenueId)] || [];
 
-    const { venueId = "default" } = req.query;
-    const customSlots = venueCalendarOverrides[venueId as string] || [];
+    // Fetch real confirmed customer bookings from MongoDB Atlas
+    const realBookings = targetVenueId
+      ? await Booking.find({ venueId: targetVenueId, status: { $ne: "cancelled" } })
+      : [];
 
-    // Confirmed dates for vendor with existing venues
-    const defaultCalendar = [
-      { date: "2026-11-07", status: "booked", bookedBy: "Varun Verma (Sangeet)", bookingRef: "BK-8902" },
-      { date: "2026-11-08", status: "booked", bookedBy: "Varun Verma (Reception)", bookingRef: "BK-8903" },
-      { date: "2026-11-10", status: "booked", bookedBy: "Anand & Divya Hegde", bookingRef: "BK-8911" },
-      { date: "2026-11-11", status: "booked", bookedBy: "Anand & Divya Hegde", bookingRef: "BK-8912" },
-      { date: "2026-11-18", status: "available", notes: "Pending lead inspection (Aishwarya)" },
-      { date: "2026-11-21", status: "booked", bookedBy: "Mindtree Executive Retreat", bookingRef: "BK-8940" },
-      { date: "2026-11-22", status: "booked", bookedBy: "Mehta Family Golden Jubilee", bookingRef: "BK-8944" },
-      ...customSlots,
-    ];
+    const bookingSlots = realBookings.map((b) => ({
+      date: b.eventDate,
+      status: "booked",
+      bookedBy: `${b.customerName} (${b.eventCategory})`,
+      bookingRef: b.bookingRef,
+      notes: `Advance Paid: ₹${b.advancePaid.toLocaleString()} • ${b.packageTitle} (${b.timeSlot})`,
+    }));
+
+    // Merge booking slots with custom vendor overrides
+    const slotMap = new Map<string, any>();
+    for (const slot of [...bookingSlots, ...customSlots]) {
+      slotMap.set(slot.date, slot);
+    }
 
     res.status(200).json({
       success: true,
-      data: defaultCalendar,
+      data: Array.from(slotMap.values()),
     });
   } catch (error) {
     next(error);
@@ -748,17 +761,34 @@ export const toggleCalendarSlot = async (
   try {
     const { venueId = "default", date, status, notes, priceModifier } = req.body;
 
-    if (!venueCalendarOverrides[venueId]) {
-      venueCalendarOverrides[venueId] = [];
+    // Prevent unblocking dates that have confirmed customer bookings in MongoDB
+    if (status === "available" && mongoose.isValidObjectId(venueId)) {
+      const activeBooking = await Booking.findOne({
+        venueId,
+        eventDate: date,
+        status: { $in: ["confirmed", "completed"] },
+      });
+      if (activeBooking) {
+        res.status(400).json({
+          success: false,
+          message: `Cannot unblock ${date}: Confirmed customer reservation (${activeBooking.bookingRef} - ${activeBooking.customerName}) is active on this date. Cancel or reschedule the booking first.`,
+        });
+        return;
+      }
     }
 
-    const existingIndex = venueCalendarOverrides[venueId].findIndex((s) => s.date === date);
+    const venueKey = String(venueId);
+    if (!venueCalendarOverrides[venueKey]) {
+      venueCalendarOverrides[venueKey] = [];
+    }
+
+    const existingIndex = venueCalendarOverrides[venueKey].findIndex((s) => s.date === date);
     const newSlot = { date, status, notes, priceModifier };
 
     if (existingIndex >= 0) {
-      venueCalendarOverrides[venueId][existingIndex] = newSlot;
+      venueCalendarOverrides[venueKey][existingIndex] = newSlot;
     } else {
-      venueCalendarOverrides[venueId].push(newSlot);
+      venueCalendarOverrides[venueKey].push(newSlot);
     }
 
     res.status(200).json({
@@ -866,4 +896,406 @@ export const getVendorPayouts = async (
     next(error);
   }
 };
+
+/**
+ * 10. Get marketplace services managed by the vendor
+ */
+export const getVendorServices = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = await resolveVendorUser(req);
+
+    if (!user) {
+      res.status(200).json({
+        success: true,
+        count: 0,
+        data: [],
+      });
+      return;
+    }
+
+    const query: any = {
+      $or: [
+        { vendorId: user._id },
+        ...(user.phone ? [{ phone: new RegExp(`${user.phone.slice(-10)}$`) }] : []),
+        ...(user.businessName ? [{ businessName: user.businessName }] : []),
+      ],
+    };
+
+    const services = await Vendor.find(query).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: services.length,
+      data: services.map((s) => ({
+        id: s._id.toString(),
+        _id: s._id.toString(),
+        businessName: s.businessName,
+        ownerName: s.ownerName,
+        category: s.category,
+        city: s.city,
+        locality: s.locality,
+        startingPrice: s.startingPrice,
+        priceUnit: s.priceUnit,
+        rating: s.rating,
+        reviewCount: s.reviewCount,
+        imageUrl: s.imageUrl,
+        portfolioImages: s.portfolioImages,
+        description: s.description,
+        isVerified: s.isVerified,
+        phone: s.phone,
+        email: s.email,
+        createdAt: s.createdAt,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 11. Create a new marketplace service listing
+ */
+export const createVendorService = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id || (req as any).user?._id;
+    let user = userId ? await User.findById(userId) : null;
+
+    const {
+      businessName,
+      ownerName,
+      category,
+      city,
+      locality,
+      startingPrice,
+      priceUnit,
+      description,
+      imageUrl,
+      portfolioImages,
+      phone,
+      email,
+    } = req.body;
+
+    if (!businessName || !category || !startingPrice) {
+      res.status(400).json({
+        success: false,
+        message: "Business name, category, and starting price are required.",
+      });
+      return;
+    }
+
+    if (!user && (phone || email)) {
+      if (phone) {
+        user = await User.findOne({ phone: String(phone).trim() });
+      }
+      if (!user && email) {
+        user = await User.findOne({ email: String(email).toLowerCase().trim() });
+      }
+      if (!user) {
+        user = await User.create({
+          name: ownerName || businessName || "Marketplace Partner",
+          phone: phone ? String(phone).trim() : undefined,
+          email: email ? String(email).toLowerCase().trim() : undefined,
+          role: "vendor",
+          businessName,
+          companyName: businessName,
+          isPhoneVerified: !!phone,
+          isEmailVerified: !!email,
+        });
+      }
+    }
+
+    const newService = await Vendor.create({
+      vendorId: user ? user._id : undefined,
+      businessName,
+      ownerName: ownerName || user?.name || "Service Partner",
+      category,
+      city: city || "Bengaluru",
+      locality: locality || "Central Bengaluru",
+      startingPrice: Number(startingPrice) || 15000,
+      priceUnit: priceUnit || "per day",
+      rating: 4.8,
+      reviewCount: 0,
+      imageUrl:
+        imageUrl ||
+        "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=800&q=80",
+      portfolioImages:
+        portfolioImages && portfolioImages.length > 0
+          ? portfolioImages
+          : [
+              imageUrl ||
+                "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=800&q=80",
+            ],
+      description: description || `Professional ${category} services for weddings and special celebrations.`,
+      isVerified: true,
+      phone: phone || user?.phone || "+91 98765 43210",
+      email: email || user?.email || "service@eventspacing.com",
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Service listing "${newService.businessName}" created successfully!`,
+      data: newService,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 12. Update a marketplace service listing
+ */
+export const updateVendorService = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updated = await Vendor.findByIdAndUpdate(id, req.body, { new: true });
+    if (!updated) {
+      res.status(404).json({ success: false, message: "Service listing not found." });
+      return;
+    }
+    res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 13. Delete a marketplace service listing
+ */
+export const deleteVendorService = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    await Vendor.findByIdAndDelete(id);
+    res.status(200).json({ success: true, message: "Service listing deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// In-memory manager replies store
+const reviewRepliesMap: Record<string, { reply: string; repliedAt: string }> = {};
+
+/**
+ * 14. Get reviews for the vendor's venues
+ */
+export const getVendorReviews = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = await resolveVendorUser(req);
+    const venues = user
+      ? await Venue.find({
+          $or: [
+            { vendorId: user._id },
+            ...(user.businessName ? [{ businessName: user.businessName }] : []),
+          ],
+        })
+      : [];
+
+    const venueName = venues.length > 0 ? venues[0].name : "Main Hall";
+    const venueId = venues.length > 0 ? venues[0]._id.toString() : "v1";
+
+    const defaultReviews = [
+      {
+        id: "REV-201",
+        venueId,
+        venueName,
+        customerName: "Rohit & Megha Sharma",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+        rating: 5,
+        eventType: "Wedding Reception",
+        guestCount: 450,
+        eventDate: "2026-10-24",
+        createdAt: "2026-10-26",
+        comment: "Hosted our wedding reception here and could not be happier! The central air conditioning, pristine bridal rooms, and the seamless valet parking handled all 450 guests without any delay. Highly recommended!",
+        ratingsBreakdown: { cleanliness: 5.0, staff: 4.9, facilities: 5.0, valueForMoney: 4.8 },
+        managerReply: reviewRepliesMap["REV-201"]?.reply || null,
+        repliedAt: reviewRepliesMap["REV-201"]?.repliedAt || null,
+      },
+      {
+        id: "REV-202",
+        venueId,
+        venueName,
+        customerName: "Priya Sundaram (Infosys)",
+        avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80",
+        rating: 4.8,
+        eventType: "Corporate Annual Summit",
+        guestCount: 220,
+        eventDate: "2026-10-18",
+        createdAt: "2026-10-20",
+        comment: "Excellent technical setup with 100% generator backup and crystal clear acoustic system. The venue manager was extremely accommodating for our early morning dry run.",
+        ratingsBreakdown: { cleanliness: 4.8, staff: 4.9, facilities: 4.8, valueForMoney: 4.7 },
+        managerReply: reviewRepliesMap["REV-202"]?.reply || "Thank you Priya! It was an absolute pleasure hosting the Infosys annual summit at our property. Looking forward to your next corporate event!",
+        repliedAt: reviewRepliesMap["REV-202"]?.repliedAt || "2026-10-21",
+      },
+      {
+        id: "REV-203",
+        venueId,
+        venueName,
+        customerName: "Dr. Anand Varma",
+        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
+        rating: 4.5,
+        eventType: "Silver Jubilee Anniversary",
+        guestCount: 180,
+        eventDate: "2026-10-05",
+        createdAt: "2026-10-07",
+        comment: "Spacious dining area and beautiful lighting decor. The outside catering team was accommodated seamlessly in the kitchen. Very memorable celebration for our family.",
+        ratingsBreakdown: { cleanliness: 4.5, staff: 4.6, facilities: 4.7, valueForMoney: 4.4 },
+        managerReply: reviewRepliesMap["REV-203"]?.reply || null,
+        repliedAt: reviewRepliesMap["REV-203"]?.repliedAt || null,
+      },
+    ];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        overallScore: 4.8,
+        totalReviews: defaultReviews.length,
+        ratingsDistribution: { 5: 2, 4: 1, 3: 0, 2: 0, 1: 0 },
+        categoryAverages: {
+          cleanliness: 4.8,
+          staffService: 4.8,
+          facilities: 4.8,
+          valueForMoney: 4.6,
+        },
+        reviews: defaultReviews,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 15. Reply to a customer review as venue manager
+ */
+export const replyVendorReview = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const { reply } = req.body;
+
+    if (!reply || !reply.trim()) {
+      res.status(400).json({ success: false, message: "Reply text is required." });
+      return;
+    }
+
+    reviewRepliesMap[id] = {
+      reply: reply.trim(),
+      repliedAt: new Date().toISOString().split("T")[0],
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Owner reply published successfully!",
+      data: reviewRepliesMap[id],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 18. Booking Management: List all customer reservations for vendor's venues
+ */
+export const getVendorBookings = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = await resolveVendorUser(req);
+    if (!user) {
+      res.status(200).json({ success: true, count: 0, data: [] });
+      return;
+    }
+
+    const venues = await Venue.find({
+      $or: [
+        { vendorId: user._id },
+        ...(user.businessName ? [{ businessName: user.businessName }] : []),
+      ],
+    });
+
+    const venueIds = venues.map((v) => v._id);
+    if (venueIds.length === 0) {
+      res.status(200).json({ success: true, count: 0, data: [] });
+      return;
+    }
+
+    const { status, venueId } = req.query;
+    const query: any = { venueId: { $in: venueIds } };
+    if (status && status !== "all") {
+      query.status = status;
+    }
+    if (venueId && venueId !== "all") {
+      query.venueId = venueId;
+    }
+
+    const bookings = await Booking.find(query).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      data: bookings,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 19. Booking Management: Update status of a reservation (e.g. checked in, completed, cancelled)
+ */
+export const updateVendorBookingStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const booking = await Booking.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
+
+    if (!booking) {
+      res.status(404).json({ success: false, message: "Booking reservation not found." });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Reservation status updated to ${status}`,
+      data: booking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 

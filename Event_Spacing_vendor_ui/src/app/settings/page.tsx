@@ -63,7 +63,21 @@ export default function VendorSettingsPage() {
       try {
         const res = await api.vendor.getProfile();
         if (isMounted && res?.data) {
-          setProfile(res.data);
+          const d = res.data;
+          setProfile({
+            ownerName: d.ownerName || "",
+            businessName: d.businessName || "",
+            phone: d.phone || "",
+            email: d.email || "",
+            gstNumber: d.gstNumber || "",
+            panNumber: d.panNumber || "",
+            bankDetails: {
+              bankName: d.bankDetails?.bankName || "",
+              accountNumber: d.bankDetails?.accountNumber || "",
+              ifscCode: d.bankDetails?.ifscCode || "",
+              accountHolder: d.bankDetails?.accountHolder || "",
+            },
+          });
         }
       } catch (err) {
         console.warn("Using local settings fallback:", err);
@@ -150,7 +164,7 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">Business / Trading Name</label>
               <input
                 type="text"
-                value={profile.businessName}
+                value={profile.businessName || ""}
                 onChange={(e) => setProfile({ ...profile, businessName: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 focus:outline-none focus:border-brand-900 focus:bg-white"
               />
@@ -160,7 +174,7 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">Authorized Owner / Manager Name</label>
               <input
                 type="text"
-                value={profile.ownerName}
+                value={profile.ownerName || ""}
                 onChange={(e) => setProfile({ ...profile, ownerName: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 focus:outline-none focus:border-brand-900 focus:bg-white"
               />
@@ -170,7 +184,7 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">Corporate Email</label>
               <input
                 type="email"
-                value={profile.email}
+                value={profile.email || ""}
                 onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 focus:outline-none focus:border-brand-900 focus:bg-white"
               />
@@ -180,7 +194,7 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">Verified Contact Mobile</label>
               <input
                 type="text"
-                value={profile.phone}
+                value={profile.phone || ""}
                 onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 focus:outline-none focus:border-brand-900 focus:bg-white"
               />
@@ -201,7 +215,7 @@ export default function VendorSettingsPage() {
               <div className="relative">
                 <input
                   type="text"
-                  value={profile.gstNumber}
+                  value={profile.gstNumber || ""}
                   readOnly
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-100 text-gray-600 font-mono cursor-not-allowed"
                 />
@@ -215,7 +229,7 @@ export default function VendorSettingsPage() {
               <div className="relative">
                 <input
                   type="text"
-                  value={profile.panNumber}
+                  value={profile.panNumber || ""}
                   readOnly
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-100 text-gray-600 font-mono cursor-not-allowed"
                 />
@@ -237,11 +251,11 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">Account Beneficiary Name</label>
               <input
                 type="text"
-                value={profile.bankDetails.accountHolder}
+                value={profile.bankDetails?.accountHolder || ""}
                 onChange={(e) =>
                   setProfile({
                     ...profile,
-                    bankDetails: { ...profile.bankDetails, accountHolder: e.target.value },
+                    bankDetails: { ...(profile.bankDetails || {}), accountHolder: e.target.value },
                   })
                 }
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 focus:outline-none focus:border-brand-900 focus:bg-white"
@@ -252,11 +266,11 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">Bank & Branch Name</label>
               <input
                 type="text"
-                value={profile.bankDetails.bankName}
+                value={profile.bankDetails?.bankName || ""}
                 onChange={(e) =>
                   setProfile({
                     ...profile,
-                    bankDetails: { ...profile.bankDetails, bankName: e.target.value },
+                    bankDetails: { ...(profile.bankDetails || {}), bankName: e.target.value },
                   })
                 }
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 focus:outline-none focus:border-brand-900 focus:bg-white"
@@ -267,11 +281,11 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">Bank Account Number</label>
               <input
                 type="text"
-                value={profile.bankDetails.accountNumber}
+                value={profile.bankDetails?.accountNumber || ""}
                 onChange={(e) =>
                   setProfile({
                     ...profile,
-                    bankDetails: { ...profile.bankDetails, accountNumber: e.target.value },
+                    bankDetails: { ...(profile.bankDetails || {}), accountNumber: e.target.value },
                   })
                 }
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 font-mono focus:outline-none focus:border-brand-900 focus:bg-white"
@@ -282,11 +296,11 @@ export default function VendorSettingsPage() {
               <label className="font-semibold text-gray-700 block mb-1.5">IFSC Code</label>
               <input
                 type="text"
-                value={profile.bankDetails.ifscCode}
+                value={profile.bankDetails?.ifscCode || ""}
                 onChange={(e) =>
                   setProfile({
                     ...profile,
-                    bankDetails: { ...profile.bankDetails, ifscCode: e.target.value },
+                    bankDetails: { ...(profile.bankDetails || {}), ifscCode: e.target.value },
                   })
                 }
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-gray-50/50 text-gray-900 font-mono focus:outline-none focus:border-brand-900 focus:bg-white"

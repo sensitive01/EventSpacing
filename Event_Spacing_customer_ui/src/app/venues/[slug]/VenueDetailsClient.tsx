@@ -34,11 +34,13 @@ import {
   DollarSign,
   AlertCircle,
   X,
+  Lock,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { MOCK_VENUES } from "@/data/mockVenues";
 import { StarRating } from "@/components/common/StarRating";
 import { Badge } from "@/components/common/Badge";
+import { PaymentGatewayModal } from "@/components/booking/PaymentGatewayModal";
 
 export default function VenueDetailsClient() {
   const params = useParams();
@@ -54,6 +56,25 @@ export default function VenueDetailsClient() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Sidebar Tab Switcher ("book" = Instant Reserve, "inquire" = Request Quote)
+  const [sidebarTab, setSidebarTab] = useState<"book" | "inquire">("book");
+
+  // Instant Booking Form State
+  const [bookDate, setBookDate] = useState("2027-01-15");
+  const [bookTimeSlot, setBookTimeSlot] = useState<"Full Day (8 AM - 11 PM)" | "Morning Slot (8 AM - 3 PM)" | "Evening Slot (4 PM - 11 PM)">("Full Day (8 AM - 11 PM)");
+  const [bookCategory, setBookCategory] = useState("Marriage / Wedding");
+  const [bookSpace, setBookSpace] = useState("");
+  const [bookPackage, setBookPackage] = useState("");
+  const [bookGuests, setBookGuests] = useState("300");
+  const [bookName, setBookName] = useState("");
+  const [bookEmail, setBookEmail] = useState("");
+  const [bookPhone, setBookPhone] = useState("");
+  const [bookSpecialNotes, setBookSpecialNotes] = useState("");
+  const [bookedSlots, setBookedSlots] = useState<any[]>([]);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isBookingSubmitting, setIsBookingSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState("");
 
   // Inquiry Form State
   const [inquiryName, setInquiryName] = useState("");
@@ -73,9 +94,18 @@ export default function VenueDetailsClient() {
       const stored = localStorage.getItem("es_user");
       if (stored) {
         const u = JSON.parse(stored);
-        if (u.name) setInquiryName(u.name);
-        if (u.email) setInquiryEmail(u.email);
-        if (u.phone) setInquiryPhone(u.phone);
+        if (u.name) {
+          setInquiryName(u.name);
+          setBookName(u.name);
+        }
+        if (u.email) {
+          setInquiryEmail(u.email);
+          setBookEmail(u.email);
+        }
+        if (u.phone) {
+          setInquiryPhone(u.phone);
+          setBookPhone(u.phone);
+        }
       }
     } catch {}
   }, []);
@@ -91,6 +121,27 @@ export default function VenueDetailsClient() {
         const res = await api.venues.getBySlug(slug);
         if (!isCancelled && res?.data) {
           setVenue(res.data);
+          if (res.data.spaces && res.data.spaces.length > 0) {
+            setBookSpace(res.data.spaces[0].name);
+          } else {
+            setBookSpace("Main Banquet Hall");
+          }
+          if (res.data.packages && res.data.packages.length > 0) {
+            setBookPackage(res.data.packages[0].title);
+          } else {
+            setBookPackage("Standard Venue Rental");
+          }
+
+          // Fetch active booked slots for conflict prevention
+          try {
+            const slotsRes = await api.venues.getBookedSlots(slug);
+            if (!isCancelled && slotsRes?.data) {
+              setBookedSlots(slotsRes.data);
+            }
+          } catch (slotErr) {
+            console.warn("Could not fetch booked slots:", slotErr);
+          }
+
           setIsLoading(false);
           return;
         }
@@ -200,6 +251,154 @@ export default function VenueDetailsClient() {
   const dayRent = venue.pricing?.pricePerDay || venue.rentalPricing?.standardDayRent || 150000;
   const vegPlate = venue.catering?.vegPlatePrice || venue.pricing?.freeVenuePlateStartingPrice || 950;
   const nonVegPlate = venue.catering?.nonVegPlatePrice || 1250;
+
+  // Instant Booking pricing & package derivation
+  const guestCountNum = parseInt(bookGuests, 10) || 100;
+
+  const venuePackages =
+    venue.packages && venue.packages.length > 0
+      ? venue.packages
+      : [
+          {
+            title: "Standard Venue Rental",
+            packageType: "venue_only",
+            price: venue.pricing?.pricePerDay || 25000,
+            priceUnit: "per_day",
+            shortDescription: "Complete exclusive hall access with power backup, AC, and stage rigging.",
+          },
+          {
+            title: "Venue + Deluxe Catering Package",
+            packageType: "venue_with_addons",
+            price: (venue.pricing?.pricePerDay || 25000) + 950 * Math.min(guestCountNum, 200),
+            priceUnit: "fixed_package",
+            shortDescription: "Full venue access plus live multi-cuisine veg/non-veg buffet catering.",
+          },
+          ...(hasFreeVenue
+            ? [
+                {
+                  title: "Free Venue Offer with Catering Plan",
+                  packageType: "free_venue_with_catering",
+                  price: 950,
+                  priceUnit: "per_plate",
+                  cateringPricePerPlate: venue.pricing?.freeVenuePlateStartingPrice || 950,
+                  shortDescription: "Zero hall rental! Pay only for food plates (minimum 200 guests).",
+                },
+              ]
+            : []),
+        ];
+
+  const effectivePackage = venuePackages.find((p: any) => p.title === bookPackage) || venuePackages[0];
+
+  let bookingTotalAmount = venue.pricing?.pricePerDay || 25000;
+  if (effectivePackage) {
+    if (effectivePackage.packageType === "free_venue_with_catering" && effectivePackage.cateringPricePerPlate) {
+      bookingTotalAmount = effectivePackage.cateringPricePerPlate * guestCountNum;
+    } else if (effectivePackage.priceUnit === "per_plate" || effectivePackage.priceUnit === "per_person") {
+      bookingTotalAmount = effectivePackage.price * guestCountNum;
+    } else if (bookTimeSlot !== "Full Day (8 AM - 11 PM)" && venue.pricing?.halfDayPrice) {
+      bookingTotalAmount = venue.pricing.halfDayPrice;
+    } else {
+      bookingTotalAmount = effectivePackage.price || venue.pricing?.pricePerDay || 25000;
+    }
+  }
+
+  const advancePercent = venue.pricing?.advancePaymentPercent || 30;
+  const advanceAmountDue = Math.round((bookingTotalAmount * advancePercent) / 100);
+  const balanceAmountDue = bookingTotalAmount - advanceAmountDue;
+  const refundableDeposit = venue.pricing?.securityDeposit || 25000;
+
+  // Checks if a given slot on a given date for a specific space is already booked
+  const checkIsSlotBooked = (date: string, slot: string, space: string) => {
+    return bookedSlots.some((b: any) => {
+      if (b.eventDate !== date) return false;
+      const bSpace = b.selectedSpaceName || "Main Banquet Hall";
+      const targetSpace = space || venue?.spaces?.[0]?.name || "Main Banquet Hall";
+      if (bSpace.toLowerCase() !== targetSpace.toLowerCase()) return false;
+
+      // Conflict logic: Full Day overlaps with all slots; identical slot overlaps
+      if (b.timeSlot === "Full Day (8 AM - 11 PM)") return true;
+      if (slot === "Full Day (8 AM - 11 PM)") return true;
+      return b.timeSlot === slot;
+    });
+  };
+
+  const isCurrentSlotBooked = checkIsSlotBooked(bookDate, bookTimeSlot, bookSpace);
+
+  const handleProceedToPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    setBookingError("");
+
+    if (isCurrentSlotBooked) {
+      setBookingError(`Slot Conflict: "${bookSpace || "Main Banquet Hall"}" is already reserved for ${bookTimeSlot} on ${bookDate}. Please pick another slot or date.`);
+      return;
+    }
+
+    if (!bookName.trim()) {
+      setBookingError("Please enter your full name.");
+      return;
+    }
+    if (!bookPhone.trim() || bookPhone.length < 10) {
+      setBookingError("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    if (!bookEmail.trim() || !bookEmail.includes("@")) {
+      setBookingError("Please enter a valid email address.");
+      return;
+    }
+    if (!bookDate) {
+      setBookingError("Please select your event date.");
+      return;
+    }
+
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentSuccess = async (paymentData: {
+    transactionId: string;
+    paymentMethod: string;
+    amountPaid: number;
+  }) => {
+    setIsBookingSubmitting(true);
+    setBookingError("");
+
+    try {
+      const payload = {
+        venueId: venue._id || venue.id || slug,
+        selectedSpaceName: bookSpace || venue.spaces?.[0]?.name || "Main Banquet Hall",
+        packageTitle: effectivePackage?.title || "Standard Venue Rental",
+        eventCategory: bookCategory,
+        eventDate: bookDate,
+        timeSlot: bookTimeSlot,
+        guestCount: guestCountNum,
+        customerName: bookName,
+        customerPhone: bookPhone,
+        customerEmail: bookEmail,
+        specialRequests: bookSpecialNotes || undefined,
+        transactionId: paymentData.transactionId,
+        paymentMethod: paymentData.paymentMethod,
+      };
+
+      const res = await api.bookings.create(payload);
+      if (res?.data?._id || res?.data?.bookingRef) {
+        setIsPaymentModalOpen(false);
+        router.push(`/my-bookings/${res.data._id || res.data.bookingRef}`);
+      } else {
+        setIsPaymentModalOpen(false);
+        router.push("/my-bookings");
+      }
+    } catch (err: any) {
+      setIsBookingSubmitting(false);
+      const msg = err.message || "Failed to confirm reservation. Please select an available slot or contact concierge.";
+      setBookingError(msg);
+      setIsPaymentModalOpen(false);
+
+      // Refresh booked slots list on race-condition
+      try {
+        const slotsRes = await api.venues.getBookedSlots(slug);
+        if (slotsRes?.data) setBookedSlots(slotsRes.data);
+      } catch {}
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fbf9fc] text-gray-900 pb-20">
@@ -589,90 +788,59 @@ export default function VenueDetailsClient() {
 
           {/* Right Column: Sticky Booking & Direct Inquiry Sidebar (4 cols) */}
           <div id="inquire-section" className="lg:col-span-4 sticky top-24 space-y-6">
-            <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xl border border-gray-200/80 space-y-6">
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-[#380c48] border border-purple-100 mb-2 uppercase tracking-wider">
-                  <Sparkles className="w-3.5 h-3.5 text-gold-500" />
-                  Direct Owner Pricing
-                </div>
-                <h3 className="font-serif text-2xl font-bold text-gray-900">
-                  Request a Site Visit or Quote
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Send your event details directly to the venue management desk. Zero broker markup.
-                </p>
+            <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xl border border-gray-200/80 space-y-5">
+              {/* Dual Tab Switcher */}
+              <div className="grid grid-cols-2 gap-2 bg-purple-50/70 p-1 rounded-2xl border border-purple-100">
+                <button
+                  type="button"
+                  onClick={() => setSidebarTab("book")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    sidebarTab === "book"
+                      ? "bg-[#380c48] text-white shadow-md"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-gold-400" />
+                  <span>Instant Reserve</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSidebarTab("inquire")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    sidebarTab === "inquire"
+                      ? "bg-[#380c48] text-white shadow-md"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <Send className="w-3.5 h-3.5 text-gold-400" />
+                  <span>Request Quote</span>
+                </button>
               </div>
 
-              {inquirySuccess ? (
-                <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3 animate-in fade-in">
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <h4 className="font-serif text-lg font-bold text-emerald-950">
-                    Inquiry Sent Successfully!
-                  </h4>
-                  <p className="text-xs text-emerald-800 leading-relaxed">
-                    The venue coordinator has received your request for <strong>{venue.name}</strong> and will connect via WhatsApp/call within 2 hours.
-                  </p>
-                  <button
-                    onClick={() => setInquirySuccess(false)}
-                    className="text-xs font-bold text-emerald-900 underline cursor-pointer"
-                  >
-                    Submit another inquiry
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleInquirySubmit} className="space-y-4">
-                  {inquiryError && (
-                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
-                      {inquiryError}
-                    </div>
-                  )}
-
+              {/* TAB 1: INSTANT BOOKING & ADVANCE PAYMENT */}
+              {sidebarTab === "book" && (
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
-                      Your Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={inquiryName}
-                      onChange={(e) => setInquiryName(e.target.value)}
-                      placeholder="e.g. Raghav Rao"
-                      className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
-                    />
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 mb-1.5 uppercase tracking-wider">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      Direct Slot Reservation
+                    </div>
+                    <h3 className="font-serif text-xl sm:text-2xl font-bold text-gray-900">
+                      Reserve Hall Instantly
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Pay 30% advance deposit to block date in owner calendar. Zero broker markup.
+                    </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">
-                        Phone Number *
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        value={inquiryPhone}
-                        onChange={(e) => setInquiryPhone(e.target.value)}
-                        placeholder="e.g. 98450 12345"
-                        className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">
-                        Email Address *
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={inquiryEmail}
-                        onChange={(e) => setInquiryEmail(e.target.value)}
-                        placeholder="e.g. user@gmail.com"
-                        className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
-                      />
-                    </div>
-                  </div>
+                  <form onSubmit={handleProceedToPayment} className="space-y-3">
+                    {bookingError && (
+                      <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+                        {bookingError}
+                      </div>
+                    )}
 
-                  <div className="grid grid-cols-2 gap-3">
+                    {/* Date Picker */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">
                         Event Date *
@@ -680,68 +848,390 @@ export default function VenueDetailsClient() {
                       <input
                         type="date"
                         required
-                        value={inquiryDate}
-                        onChange={(e) => setInquiryDate(e.target.value)}
-                        className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
+                        value={bookDate}
+                        onChange={(e) => setBookDate(e.target.value)}
+                        className="w-full text-xs px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
                       />
                     </div>
+
+                    {/* Slot Selector */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-gray-700">
+                          Time Slot *
+                        </label>
+                        {isCurrentSlotBooked ? (
+                          <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
+                            🔒 Slot Occupied
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                            ⚡ Available
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { label: "Full Day", value: "Full Day (8 AM - 11 PM)" },
+                          { label: "Morning", value: "Morning Slot (8 AM - 3 PM)" },
+                          { label: "Evening", value: "Evening Slot (4 PM - 11 PM)" },
+                        ].map((slot) => {
+                          const slotBooked = checkIsSlotBooked(bookDate, slot.value, bookSpace);
+                          return (
+                            <button
+                              key={slot.value}
+                              type="button"
+                              disabled={slotBooked}
+                              onClick={() => setBookTimeSlot(slot.value as any)}
+                              className={`py-2 px-1 text-center rounded-xl text-[10px] sm:text-[11px] font-bold transition-all border cursor-pointer relative ${
+                                slotBooked
+                                  ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through"
+                                  : bookTimeSlot === slot.value
+                                  ? "bg-[#380c48] text-white border-[#380c48] shadow-sm"
+                                  : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                              }`}
+                            >
+                              <div>{slot.label}</div>
+                              {slotBooked && (
+                                <span className="text-[9px] font-semibold text-rose-500 no-underline block leading-none mt-0.5">
+                                  Booked
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Conflict Warning Banner if current slot is taken */}
+                    {isCurrentSlotBooked && (
+                      <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2 animate-in fade-in">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Slot Already Reserved:</strong> &ldquo;{bookSpace || "Main Hall"}&rdquo; is already booked on {bookDate} for this time slot. Please pick an alternative slot or date.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Hall / Space Selector */}
+                    {venue.spaces && venue.spaces.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Select Hall / Space
+                        </label>
+                        <select
+                          value={bookSpace}
+                          onChange={(e) => setBookSpace(e.target.value)}
+                          className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] bg-white font-medium"
+                        >
+                          {venue.spaces.map((sp: any) => (
+                            <option key={sp.id || sp._id || sp.name} value={sp.name}>
+                              {sp.name} ({sp.seatingCapacity} seats • ₹{sp.pricePerDay?.toLocaleString()})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Package Selector */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">
-                        Guest Count *
+                        Selected Package
                       </label>
-                      <input
-                        type="number"
-                        required
-                        min="20"
-                        value={inquiryGuests}
-                        onChange={(e) => setInquiryGuests(e.target.value)}
-                        placeholder="e.g. 300"
-                        className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
-                      />
+                      <select
+                        value={bookPackage}
+                        onChange={(e) => setBookPackage(e.target.value)}
+                        className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] bg-white font-medium"
+                      >
+                        {venuePackages.map((pkg: any) => (
+                          <option key={pkg.title} value={pkg.title}>
+                            {pkg.title} ({pkg.priceUnit === "per_plate" ? `₹${pkg.price}/plate` : `₹${pkg.price?.toLocaleString()}`})
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
-                      Event Category
-                    </label>
-                    <select
-                      value={inquiryEventType}
-                      onChange={(e) => setInquiryEventType(e.target.value)}
-                      className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium bg-white"
+                    {/* Event Category & Guest Count */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Occasion
+                        </label>
+                        <select
+                          value={bookCategory}
+                          onChange={(e) => setBookCategory(e.target.value)}
+                          className="w-full text-xs px-2.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] bg-white font-medium"
+                        >
+                          <option value="Marriage / Wedding">Marriage / Wedding</option>
+                          <option value="Reception">Reception</option>
+                          <option value="Engagement">Engagement</option>
+                          <option value="Birthday">Birthday Party</option>
+                          <option value="Anniversary">Anniversary</option>
+                          <option value="Baby Shower">Baby Shower</option>
+                          <option value="Naming Ceremony">Naming Ceremony</option>
+                          <option value="Family Functions">Family Functions</option>
+                          <option value="Corporate Meetings">Corporate Meetings</option>
+                          <option value="Conferences">Conferences</option>
+                          <option value="Seminars">Seminars</option>
+                          <option value="Training Programs">Training Programs</option>
+                          <option value="Product Launches">Product Launches</option>
+                          <option value="Exhibitions">Exhibitions</option>
+                          <option value="Award Functions">Award Functions</option>
+                          <option value="Team Outings">Team Outings</option>
+                          <option value="Workshops">Workshops</option>
+                          <option value="Private Parties">Private Parties</option>
+                          <option value="Religious / Community Events">Religious / Community</option>
+                          <option value="Other Custom Events">Other Custom Events</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Guests *
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min="20"
+                          value={bookGuests}
+                          onChange={(e) => setBookGuests(e.target.value)}
+                          className="w-full text-xs px-2.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Customer Details */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        Reservation Contact
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        value={bookName}
+                        onChange={(e) => setBookName(e.target.value)}
+                        placeholder="Your Full Name *"
+                        className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48]"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="tel"
+                          required
+                          value={bookPhone}
+                          onChange={(e) => setBookPhone(e.target.value)}
+                          placeholder="Phone Number *"
+                          className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48]"
+                        />
+                        <input
+                          type="email"
+                          required
+                          value={bookEmail}
+                          onChange={(e) => setBookEmail(e.target.value)}
+                          placeholder="Email Address *"
+                          className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#fcf7ff] to-purple-50/50 border border-purple-100 space-y-1.5 text-xs">
+                      <div className="flex justify-between text-gray-600">
+                        <span>Total Package Cost:</span>
+                        <span className="font-bold text-gray-900">₹{bookingTotalAmount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500 text-[11px]">
+                        <span>GST (18% Included):</span>
+                        <span className="font-semibold text-emerald-700">Tax Itemized</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500 text-[11px]">
+                        <span>Security Deposit (Refundable):</span>
+                        <span className="font-medium text-gray-700">₹{refundableDeposit.toLocaleString()}</span>
+                      </div>
+                      <div className="border-t border-purple-200 pt-2 flex justify-between items-center text-sm font-bold">
+                        <div>
+                          <span className="text-[#380c48] block text-xs">Advance Token Due (30%):</span>
+                          <span className="text-[10px] text-gray-500 font-normal">Balance ₹{balanceAmountDue.toLocaleString()} at check-in</span>
+                        </div>
+                        <span className="text-xl font-serif font-extrabold text-[#380c48]">
+                          ₹{advanceAmountDue.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isBookingSubmitting || isCurrentSlotBooked}
+                      className="w-full bg-[#380c48] hover:bg-[#5a136b] text-white font-bold text-xs sm:text-sm py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <option value="Marriage / Wedding">Marriage / Wedding</option>
-                      <option value="Reception">Reception</option>
-                      <option value="Engagement">Engagement</option>
-                      <option value="Birthday">Birthday Party</option>
-                      <option value="Corporate Meetings">Corporate Meeting / Conference</option>
-                      <option value="Anniversary">Anniversary</option>
-                      <option value="Other Custom Events">Other Occasion</option>
-                    </select>
+                      <Lock className="w-4 h-4 text-gold-300" />
+                      <span>
+                        {isCurrentSlotBooked
+                          ? "Slot Unavailable (Select Another Date)"
+                          : isBookingSubmitting
+                          ? "Locking Slot..."
+                          : `Pay Advance (₹${advanceAmountDue.toLocaleString()}) & Confirm`}
+                      </span>
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* TAB 2: REQUEST CUSTOM QUOTE / SITE VISIT */}
+              {sidebarTab === "inquire" && (
+                <div>
+                  <div className="mb-4">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-[#380c48] border border-purple-100 mb-2 uppercase tracking-wider">
+                      <Sparkles className="w-3.5 h-3.5 text-gold-500" />
+                      Direct Owner Pricing
+                    </div>
+                    <h3 className="font-serif text-2xl font-bold text-gray-900">
+                      Request a Site Visit or Quote
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Send your event details directly to the venue management desk. Zero broker markup.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
-                      Special Requirements (Optional)
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={inquiryMessage}
-                      onChange={(e) => setInquiryMessage(e.target.value)}
-                      placeholder="Catering preferences, room requirements, timing..."
-                      className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium resize-none"
-                    />
-                  </div>
+                  {inquirySuccess ? (
+                    <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3 animate-in fade-in">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-serif text-lg font-bold text-emerald-950">
+                        Inquiry Sent Successfully!
+                      </h4>
+                      <p className="text-xs text-emerald-800 leading-relaxed">
+                        The venue coordinator has received your request for <strong>{venue.name}</strong> and will connect via WhatsApp/call within 2 hours.
+                      </p>
+                      <button
+                        onClick={() => setInquirySuccess(false)}
+                        className="text-xs font-bold text-emerald-900 underline cursor-pointer"
+                      >
+                        Submit another inquiry
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleInquirySubmit} className="space-y-4">
+                      {inquiryError && (
+                        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+                          {inquiryError}
+                        </div>
+                      )}
 
-                  <button
-                    type="submit"
-                    disabled={isSubmittingInquiry}
-                    className="w-full bg-[#380c48] hover:bg-[#5a136b] text-white font-bold text-xs sm:text-sm py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-                  >
-                    <Send className="w-4 h-4 text-gold-300" />
-                    <span>{isSubmittingInquiry ? "Connecting with Owner..." : "Get Guaranteed Best Quote"}</span>
-                  </button>
-                </form>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Your Full Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={inquiryName}
+                          onChange={(e) => setInquiryName(e.target.value)}
+                          placeholder="e.g. Raghav Rao"
+                          className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">
+                            Phone Number *
+                          </label>
+                          <input
+                            type="tel"
+                            required
+                            value={inquiryPhone}
+                            onChange={(e) => setInquiryPhone(e.target.value)}
+                            placeholder="e.g. 98450 12345"
+                            className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">
+                            Email Address *
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            value={inquiryEmail}
+                            onChange={(e) => setInquiryEmail(e.target.value)}
+                            placeholder="e.g. user@gmail.com"
+                            className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">
+                            Event Date *
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={inquiryDate}
+                            onChange={(e) => setInquiryDate(e.target.value)}
+                            className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">
+                            Guest Count *
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            min="20"
+                            value={inquiryGuests}
+                            onChange={(e) => setInquiryGuests(e.target.value)}
+                            placeholder="e.g. 300"
+                            className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Event Category
+                        </label>
+                        <select
+                          value={inquiryEventType}
+                          onChange={(e) => setInquiryEventType(e.target.value)}
+                          className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium bg-white"
+                        >
+                          <option value="Marriage / Wedding">Marriage / Wedding</option>
+                          <option value="Reception">Reception</option>
+                          <option value="Engagement">Engagement</option>
+                          <option value="Birthday">Birthday Party</option>
+                          <option value="Corporate Meetings">Corporate Meeting / Conference</option>
+                          <option value="Anniversary">Anniversary</option>
+                          <option value="Other Custom Events">Other Occasion</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Special Requirements (Optional)
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={inquiryMessage}
+                          onChange={(e) => setInquiryMessage(e.target.value)}
+                          placeholder="Catering preferences, room requirements, timing..."
+                          className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-medium resize-none"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmittingInquiry}
+                        className="w-full bg-[#380c48] hover:bg-[#5a136b] text-white font-bold text-xs sm:text-sm py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                      >
+                        <Send className="w-4 h-4 text-gold-300" />
+                        <span>{isSubmittingInquiry ? "Connecting with Owner..." : "Get Guaranteed Best Quote"}</span>
+                      </button>
+                    </form>
+                  )}
+                </div>
               )}
 
               {/* Trust Badges */}
@@ -759,6 +1249,27 @@ export default function VenueDetailsClient() {
           </div>
         </div>
       </section>
+
+      {/* 4. Payment Gateway Checkout Modal */}
+      <PaymentGatewayModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        bookingDetails={{
+          venueName: venue.name,
+          spaceName: bookSpace || "Main Banquet Hall",
+          packageTitle: effectivePackage?.title || "Standard Venue Rental",
+          eventDate: bookDate,
+          timeSlot: bookTimeSlot,
+          guestCount: guestCountNum,
+          totalAmount: bookingTotalAmount,
+          advanceAmount: advanceAmountDue,
+          balanceDue: balanceAmountDue,
+          customerName: bookName,
+          customerPhone: bookPhone,
+          customerEmail: bookEmail,
+        }}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

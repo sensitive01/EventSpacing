@@ -33,7 +33,26 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
 }) => {
   const [locationSearch, setLocationSearch] = useState("");
   const [showMoreLocations, setShowMoreLocations] = useState(false);
+  const [showMoreVenueTypes, setShowMoreVenueTypes] = useState(false);
   const [showMoreAmenities, setShowMoreAmenities] = useState(false);
+
+  const venueTypesList = [
+    { name: "Banquet Hall", count: 420 },
+    { name: "Convention Center", count: 85 },
+    { name: "Hotel", count: 195 },
+    { name: "Restaurant", count: 110 },
+    { name: "Resort", count: 140 },
+    { name: "Marriage Hall", count: 310 },
+    { name: "Community Hall", count: 90 },
+    { name: "Auditorium", count: 45 },
+    { name: "Conference Room", count: 160 },
+    { name: "Co-working / Event Space", count: 75 },
+    { name: "Outdoor Lawn", count: 215 },
+    { name: "Rooftop Space", count: 130 },
+    { name: "Farmhouse / Club", count: 105 },
+    { name: "Party Hall", count: 240 },
+    { name: "Studio", count: 50 },
+  ];
 
   const localities = [
     { name: "Bengaluru", count: 1245 },
@@ -100,6 +119,18 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
       ? filters.selectedEventTypes.filter((item) => item !== type)
       : [...filters.selectedEventTypes, type];
     onFilterChange({ selectedEventTypes: updated });
+  };
+
+  /**
+   * Toggles inclusion of a venue type in the filter state.
+   */
+  const handleVenueTypeToggle = (type: string) => {
+    const current = filters.selectedVenueTypes || [];
+    const exists = current.includes(type);
+    const updated = exists
+      ? current.filter((item) => item !== type)
+      : [...current, type];
+    onFilterChange({ selectedVenueTypes: updated });
   };
 
   /**
@@ -225,6 +256,45 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
             );
           })}
         </div>
+      </div>
+
+      {/* 4. Venue Type Filter (15 Master Types) */}
+      <div className="pt-4 border-t border-gray-100 space-y-3">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-800 flex items-center justify-between">
+          <span>Venue Type</span>
+          <ChevronUp className="w-4 h-4 text-gray-400" />
+        </h4>
+
+        <div className="space-y-2">
+          {(showMoreVenueTypes ? venueTypesList : venueTypesList.slice(0, 5)).map((type) => {
+            const isChecked = (filters.selectedVenueTypes || []).includes(type.name);
+            return (
+              <label
+                key={type.name}
+                className="flex items-center justify-between text-xs text-gray-700 hover:text-brand-900 cursor-pointer select-none"
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => handleVenueTypeToggle(type.name)}
+                    className="w-4 h-4 rounded text-brand-800 focus:ring-brand-700 accent-brand-800"
+                  />
+                  <span>{type.name}</span>
+                </div>
+                <span className="text-[11px] text-gray-400">({type.count})</span>
+              </label>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowMoreVenueTypes(!showMoreVenueTypes)}
+          className="text-xs font-semibold text-brand-800 hover:underline inline-flex items-center gap-1"
+        >
+          <span>{showMoreVenueTypes ? "Show Less" : `+ View All ${venueTypesList.length} Types`}</span>
+        </button>
       </div>
 
       {/* 4. Guest Capacity Segmented Radios */}

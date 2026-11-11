@@ -25,11 +25,13 @@ import { api } from "@/lib/api";
 export default function VendorDashboardPage() {
   const [venues, setVenues] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  const [dashboardBookings, setDashboardBookings] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalVenues: 0,
     activeVenues: 0,
     totalLeads: 0,
     newLeads: 0,
+    confirmedBookings: 0,
     monthlyEarnings: 0,
     bookingConversionRate: "0%",
   });
@@ -50,10 +52,11 @@ export default function VendorDashboardPage() {
           } catch {}
         }
 
-        const [statsRes, venuesRes, leadsRes] = await Promise.allSettled([
+        const [statsRes, venuesRes, leadsRes, bookingsRes] = await Promise.allSettled([
           api.vendor.getStats(),
           api.vendor.getVenues(),
           api.vendor.getLeads(),
+          api.vendor.getBookings(),
         ]);
 
         if (isMounted) {
@@ -65,6 +68,9 @@ export default function VendorDashboardPage() {
           }
           if (leadsRes.status === "fulfilled" && Array.isArray(leadsRes.value?.data)) {
             setLeads(leadsRes.value.data);
+          }
+          if (bookingsRes.status === "fulfilled" && Array.isArray(bookingsRes.value?.data)) {
+            setDashboardBookings(bookingsRes.value.data);
           }
           setIsLoading(false);
         }
@@ -200,7 +206,10 @@ export default function VendorDashboardPage() {
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
+        <Link
+          href="/bookings"
+          className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft hover:shadow-card transition-all cursor-pointer block"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Confirmed Bookings</span>
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
@@ -209,13 +218,18 @@ export default function VendorDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-gray-900">
-              {venues.length === 0 ? 0 : Math.round(stats.totalLeads * 0.25)}
+              {stats.confirmedBookings !== undefined && stats.confirmedBookings > 0
+                ? stats.confirmedBookings
+                : dashboardBookings.length}
             </div>
-            <p className="text-[11px] text-gray-500 font-medium mt-1">
-              Avg conversion: <strong className="text-brand-900">{stats.bookingConversionRate || "0%"}</strong>
+            <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center justify-between">
+              <span className="text-[#380c48] font-bold hover:underline">Manage Bookings &rarr;</span>
+              <strong className="text-emerald-700 font-semibold">
+                {dashboardBookings.length > 0 ? `${dashboardBookings.length} Active` : "0 Bookings"}
+              </strong>
             </p>
           </div>
-        </div>
+        </Link>
 
         <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
           <div className="flex items-center justify-between">
@@ -347,45 +361,59 @@ export default function VendorDashboardPage() {
               <h2 className="font-serif text-lg font-bold text-gray-900">Upcoming Bookings</h2>
               <p className="text-xs text-gray-500">Confirmed dates on your calendar</p>
             </div>
-            <Link href="/calendar" className="text-xs font-bold text-brand-800 hover:text-brand-950">
-              Calendar &rarr;
+            <Link href="/bookings" className="text-xs font-bold text-brand-800 hover:text-brand-950">
+              View All ({dashboardBookings.length}) &rarr;
             </Link>
           </div>
 
-          {venues.length === 0 ? (
+          {dashboardBookings.length === 0 ? (
             <div className="p-8 rounded-2xl bg-gray-50 border border-dashed border-gray-200 text-center space-y-2">
               <Calendar className="w-8 h-8 text-gray-400 mx-auto" />
               <p className="text-xs font-semibold text-gray-700">No bookings scheduled</p>
-              <p className="text-[11px] text-gray-500">Publish your venue to begin receiving reservation dates.</p>
+              <p className="text-[11px] text-gray-500">Confirmed customer reservations will appear here.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="p-4 rounded-2xl bg-brand-50/60 border border-brand-100 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-900 text-white flex flex-col items-center justify-center shrink-0">
-                  <span className="text-[10px] uppercase font-bold leading-none text-gold-400">
-                    Nov
-                  </span>
-                  <span className="text-sm font-bold leading-none mt-0.5">
-                    28
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-gray-900 truncate">Pending Site Inspections</p>
-                  <p className="text-[11px] text-gray-500 flex items-center justify-between mt-0.5">
-                    <span>Wedding Season Slots</span>
-                    <span className="text-emerald-700 font-semibold">Open</span>
-                  </p>
-                </div>
-              </div>
+              {dashboardBookings.slice(0, 3).map((b) => (
+                <Link
+                  key={b._id}
+                  href="/bookings"
+                  className="p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100 hover:bg-purple-100/60 transition-all flex items-start gap-3 block"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#380c48] text-white flex flex-col items-center justify-center shrink-0">
+                    <span className="text-[9px] uppercase font-bold leading-none text-gold-400">
+                      {new Date(b.eventDate).toLocaleDateString("en-IN", { month: "short" })}
+                    </span>
+                    <span className="text-sm font-bold leading-none mt-0.5">
+                      {new Date(b.eventDate).getDate()}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1 text-xs">
+                    <p className="font-bold text-gray-900 truncate">{b.customerName}</p>
+                    <p className="text-[11px] text-gray-500 truncate">
+                      {b.eventCategory} &bull; {b.guestCount} Guests
+                    </p>
+                    <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+                      Advance: ₹{b.advancePaid.toLocaleString()}
+                    </p>
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
 
-          <div className="pt-2 border-t border-gray-100">
+          <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+            <Link
+              href="/bookings"
+              className="text-xs font-bold text-[#380c48] hover:underline"
+            >
+              Open Booking Manager &rarr;
+            </Link>
             <Link
               href="/calendar"
-              className="w-full py-2.5 rounded-xl border border-dashed border-brand-300 text-brand-800 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-brand-50 transition-colors"
+              className="text-xs text-gray-500 hover:text-gray-900 font-medium"
             >
-              <span>Block Maintenance or Holiday Dates</span>
+              View Calendar
             </Link>
           </div>
         </div>

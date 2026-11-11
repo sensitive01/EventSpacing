@@ -56,6 +56,7 @@ function VenuesExploreContent() {
     selectedCity: "Bengaluru",
     selectedLocalities: ["Bengaluru"],
     selectedEventTypes: [],
+    selectedVenueTypes: [],
     capacityRange: "any",
     maxPrice: 500000,
     selectedAmenities: [],
@@ -151,6 +152,10 @@ function VenuesExploreContent() {
 
       if (filters.selectedAmenities.length > 0) {
         params.amenities = filters.selectedAmenities.join(",");
+      }
+
+      if (filters.selectedVenueTypes && filters.selectedVenueTypes.length > 0) {
+        params.venueType = filters.selectedVenueTypes.join(",");
       }
 
       try {

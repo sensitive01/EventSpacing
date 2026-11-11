@@ -16,7 +16,7 @@ const API_BASE_URL = rawUrl.endsWith("/api")
  */
 export const httpClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -94,7 +94,8 @@ httpClient.interceptors.response.use(
 );
 
 /**
- * Type-safe API service methods for Event Spacing Vendor Hub
+ * Type-safe API service methods 
+ * 
  */
 export const api = {
   // Authentication & Partner Identity
@@ -189,6 +190,62 @@ export const api = {
     }): Promise<any> => httpClient.post("/vendor-portal/calendar/slot", data),
 
     getPayouts: (): Promise<any> => httpClient.get("/vendor-portal/payouts"),
+
+    // Marketplace Service Listings (Catering, Decor, Photography, DJs, etc.)
+    getServices: (params?: Record<string, any>): Promise<any> => {
+      let extraParams: Record<string, any> = {};
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("es_vendor_user");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.phone) extraParams.phone = parsed.phone;
+            if (parsed.name) extraParams.name = parsed.name;
+            if (parsed.id || parsed._id) extraParams.vendorId = parsed.id || parsed._id;
+          }
+        } catch {}
+      }
+      return httpClient.get("/vendor-portal/services", { params: { ...extraParams, ...params } });
+    },
+
+    getServiceById: (id: string): Promise<any> =>
+      httpClient.get(`/vendor-portal/services/${id}`),
+
+    createService: (data: any): Promise<any> =>
+      httpClient.post("/vendor-portal/services", data),
+
+    updateService: (id: string, data: any): Promise<any> =>
+      httpClient.put(`/vendor-portal/services/${id}`, data),
+
+    deleteService: (id: string): Promise<any> =>
+      httpClient.delete(`/vendor-portal/services/${id}`),
+
+    // Customer Reviews & Feedback
+    getReviews: (params?: Record<string, any>): Promise<any> =>
+      httpClient.get("/vendor-portal/reviews", { params }),
+
+    replyReview: (id: string, reply: string): Promise<any> =>
+      httpClient.post(`/vendor-portal/reviews/${id}/reply`, { reply }),
+
+    // Booking Management
+    getBookings: (params?: Record<string, any>): Promise<any> => {
+      let extraParams: Record<string, any> = {};
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("es_vendor_user");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.phone) extraParams.phone = parsed.phone;
+            if (parsed.name) extraParams.name = parsed.name;
+            if (parsed.id || parsed._id) extraParams.vendorId = parsed.id || parsed._id;
+          }
+        } catch {}
+      }
+      return httpClient.get("/vendor-portal/bookings", { params: { ...extraParams, ...params } });
+    },
+
+    updateBookingStatus: (id: string, status: string): Promise<any> =>
+      httpClient.patch(`/vendor-portal/bookings/${id}/status`, { status }),
   },
 };
 
