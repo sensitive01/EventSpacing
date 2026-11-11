@@ -18,5 +18,11 @@ export const createBookingSchema = z.object({
   specialRequests: z.string().optional(),
   transactionId: z.string().optional(),
   paymentMethod: z.string().optional(),
+  paymentGateway: z.enum(["razorpay", "direct_upi"]).optional(),
+  utrNumber: z.string().optional(),
+  paymentProofUrl: z.string().optional(),
+  razorpayOrderId: z.string().optional(),
+  razorpayPaymentId: z.string().optional(),
+  razorpaySignature: z.string().optional(),
 });
 

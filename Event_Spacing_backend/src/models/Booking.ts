@@ -24,12 +24,22 @@ export interface IBooking extends Document {
   advancePaid: number;
   balanceDue: number;
   securityDeposit: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled" | "refunded";
+  status: "pending" | "pending_approval" | "confirmed" | "completed" | "cancelled" | "rejected" | "refunded";
   cancellationPolicy: ICancellationPolicy;
   customerName: string;
   customerPhone: string;
   customerEmail: string;
   specialRequests?: string;
+  paymentGateway?: "razorpay" | "direct_upi";
+  utrNumber?: string;
+  paymentProofUrl?: string;
+  paymentStatus?: "verification_pending" | "paid" | "failed";
+  adminApprovalNotes?: string;
+  approvedAt?: Date;
+  approvedBy?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
   paymentDetails?: {
     transactionId?: string;
     paymentMethod?: string;
@@ -89,7 +99,7 @@ const BookingSchema = new Schema<IBooking>(
     securityDeposit: { type: Number, default: 25000 },
     status: {
       type: String,
-      enum: ["pending", "confirmed", "completed", "cancelled", "refunded"],
+      enum: ["pending", "pending_approval", "confirmed", "completed", "cancelled", "rejected", "refunded"],
       default: "confirmed",
     },
     cancellationPolicy: {
@@ -105,6 +115,24 @@ const BookingSchema = new Schema<IBooking>(
     customerPhone: { type: String, required: true },
     customerEmail: { type: String, required: true },
     specialRequests: { type: String },
+    paymentGateway: {
+      type: String,
+      enum: ["razorpay", "direct_upi"],
+      default: "direct_upi",
+    },
+    utrNumber: { type: String, trim: true },
+    paymentProofUrl: { type: String },
+    paymentStatus: {
+      type: String,
+      enum: ["verification_pending", "paid", "failed"],
+      default: "paid",
+    },
+    adminApprovalNotes: { type: String },
+    approvedAt: { type: Date },
+    approvedBy: { type: String },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String },
     paymentDetails: {
       transactionId: { type: String },
       paymentMethod: { type: String, default: "UPI" },

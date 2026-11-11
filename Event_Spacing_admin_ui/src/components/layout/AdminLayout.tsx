@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -20,7 +20,7 @@ import {
   LogOut,
   Lock,
 } from "lucide-react";
-import { mockApprovalQueue } from "@/data/mockAdminData";
+import { api } from "@/lib/api";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -29,7 +29,22 @@ interface AdminLayoutProps {
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const pendingApprovalsCount = mockApprovalQueue.filter((a) => a.status === "pending").length;
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchBadge = async () => {
+      try {
+        const res = await api.admin.getMetrics();
+        if (res?.success && res?.data) {
+          const count = (res.data.venuesUnderReview || 0) + (res.data.pendingApprovalsCount || 0);
+          setPendingApprovalsCount(count);
+        }
+      } catch (err) {
+        // Silently ignore
+      }
+    };
+    fetchBadge();
+  }, [pathname]);
 
   const navigationItems = [
     { name: "Operations Dashboard", href: "/", icon: LayoutDashboard },
@@ -37,8 +52,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       name: "Verification Queue",
       href: "/approvals",
       icon: ShieldCheck,
-      badge: `${pendingApprovalsCount} Action`,
-      isUrgent: true,
+      badge: pendingApprovalsCount > 0 ? `${pendingApprovalsCount} Action` : undefined,
+      isUrgent: pendingApprovalsCount > 0,
     },
     { name: "Venue Catalog", href: "/venues", icon: Building2 },
     { name: "Vendor Partners", href: "/vendors", icon: Users },

@@ -169,6 +169,15 @@ export const api = {
 
     cancel: (id: string): Promise<any> =>
       httpClient.post(`/bookings/${id}/cancel`),
+
+    getPendingApprovals: (): Promise<any> =>
+      httpClient.get("/bookings/pending-approvals"),
+
+    approve: (id: string, data?: { notes?: string; approvedBy?: string }): Promise<any> =>
+      httpClient.put(`/bookings/${id}/approve`, data || {}),
+
+    reject: (id: string, data?: { reason?: string }): Promise<any> =>
+      httpClient.put(`/bookings/${id}/reject`, data || {}),
   },
 
   // Inquiries / Leads API
@@ -226,5 +235,11 @@ export const api = {
   categories: {
     getAll: (): Promise<any> => httpClient.get("/categories"),
     getLocalities: (): Promise<any> => httpClient.get("/categories/localities"),
+  },
+
+  // Platform Settings API
+  settings: {
+    getUpi: (): Promise<any> => httpClient.get("/settings/upi"),
+    updateUpi: (data: any): Promise<any> => httpClient.put("/settings/upi", data),
   },
 };

@@ -399,3 +399,35 @@ export const getVenueBookedSlots = async (
   }
 };
 
+export const deleteVenue = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const deleted = await Venue.findByIdAndDelete(id);
+    res.status(200).json({ success: true, message: "Venue deleted", data: deleted });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const purgeDemoVenues = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const deleted = await Venue.deleteMany({ name: { $ne: "VenueBk" } });
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${deleted.deletedCount} demo venues. Only VenueBk is preserved.`,
+      deletedCount: deleted.deletedCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+

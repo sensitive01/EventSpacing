@@ -74,3 +74,37 @@ export interface PlatformTransaction {
   netPayoutToVendor: number;
   paymentStatus: "completed" | "escrow_held" | "refunded";
 }
+
+export interface DirectUpiPaymentApproval {
+  _id?: string;
+  id?: string;
+  bookingRef: string;
+  venueName: string;
+  selectedSpaceName?: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  eventDate: string;
+  timeSlot: string;
+  guestCount: number;
+  totalAmount: number;
+  advancePaid: number;
+  balanceDue: number;
+  utrNumber: string;
+  paymentProofUrl?: string;
+  paymentGateway: "direct_upi" | "razorpay";
+  status: "pending_approval" | "confirmed" | "rejected";
+  paymentStatus: "verification_pending" | "paid" | "failed";
+  createdAt?: string;
+  adminApprovalNotes?: string;
+}
+
+export interface UpiGatewayConfig {
+  upiId: string;
+  payeeName: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  qrCodeUrl?: string;
+  isEnabled: boolean;
+}

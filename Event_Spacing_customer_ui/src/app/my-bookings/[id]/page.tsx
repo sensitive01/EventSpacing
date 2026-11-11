@@ -151,10 +151,11 @@ export default function BookingDetailPage() {
 
   const isConfirmed = booking.status === "confirmed";
   const isCancelled = booking.status === "cancelled";
+  const isPendingApproval = booking.status === "pending_approval";
 
   const invoiceNo = booking.paymentDetails?.invoiceNumber || `INV-2026-${booking.bookingRef.slice(-4)}`;
-  const txnId = booking.paymentDetails?.transactionId || `TXN_UPI_${booking.bookingRef.slice(-4)}9874`;
-  const paymentMethod = booking.paymentDetails?.paymentMethod || "UPI (Verified)";
+  const txnId = booking.utrNumber || booking.paymentDetails?.transactionId || `TXN_UPI_${booking.bookingRef.slice(-4)}9874`;
+  const paymentMethod = booking.paymentDetails?.paymentMethod || (booking.paymentGateway === "direct_upi" ? "Direct UPI (QR Payment)" : "UPI (Verified)");
   const paymentDate = booking.paymentDetails?.paidAt
     ? new Date(booking.paymentDetails.paidAt).toLocaleDateString("en-IN", {
         day: "numeric",
@@ -247,15 +248,21 @@ export default function BookingDetailPage() {
                   {booking.bookingRef}
                 </span>
                 <span
-                  className={`text-[10px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full ${
+                  className={`text-[10px] uppercase font-extrabold tracking-wider px-2.5 py-0.5 rounded-full ${
                     isConfirmed
                       ? "bg-emerald-400 text-emerald-950"
                       : isCancelled
                       ? "bg-rose-300 text-rose-950"
+                      : isPendingApproval
+                      ? "bg-amber-400 text-amber-950"
                       : "bg-gold-400 text-brand-950"
                   }`}
                 >
-                  {isConfirmed ? "Confirmed & Slot Locked" : booking.status}
+                  {isConfirmed
+                    ? "Confirmed & Slot Locked"
+                    : isPendingApproval
+                    ? "Payment Under Review • Pending Admin Approval"
+                    : booking.status}
                 </span>
               </div>
               <h1 className="font-serif text-2xl font-bold tracking-tight">
@@ -263,10 +270,14 @@ export default function BookingDetailPage() {
                   ? "Your Event Reservation is Confirmed!"
                   : isCancelled
                   ? "Reservation Has Been Cancelled"
+                  : isPendingApproval
+                  ? "Payment Proof Submitted • Awaiting Verification"
                   : "Reservation Under Review"}
               </h1>
               <p className="text-xs text-gray-300">
-                Advance payment verified via {paymentMethod} • Date slot locked in venue owner calendar.
+                {isPendingApproval
+                  ? `Your 12-digit UPI UTR (${txnId}) is being verified by our operations desk. Date slot will be locked upon approval.`
+                  : `Advance payment verified via ${paymentMethod} • Date slot locked in venue owner calendar.`}
               </p>
             </div>
           </div>
@@ -511,6 +522,20 @@ export default function BookingDetailPage() {
                 <div className="text-[10px] text-gray-500 pt-1 font-mono">
                   Txn Ref: <strong>{txnId}</strong> &bull; Method: {paymentMethod}
                 </div>
+
+                {booking.paymentProofUrl && (
+                  <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between text-xs">
+                    <span className="text-gray-600 font-medium">Payment Proof Screenshot:</span>
+                    <a
+                      href={booking.paymentProofUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#380c48] font-bold underline text-[11px]"
+                    >
+                      View Receipt Preview ↗
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Digital Seal / QR Stamp */}

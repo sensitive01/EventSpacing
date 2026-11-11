@@ -622,7 +622,6 @@ export default function AccountSettingsPage() {
                       </div>
                       <div>
                         <div className="text-xs font-bold text-gray-900">Current Device Session</div>
-                        <div className="text-[11px] text-gray-500">Connected via JWT Bearer Token • MongoDB Atlas</div>
                       </div>
                     </div>
                     <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">

@@ -32,6 +32,7 @@ export async function generateStaticParams() {
     { slug: "skyline-rooftop-lounge-mg-road" },
     { slug: "summit-convention-centre-whitefield" },
     { slug: "serene-palms-resort-lawn-sarjapur" },
+    { slug: "venuebk-0689" },
     { slug: "bk-hall-5028" },
   ];
 }

@@ -259,7 +259,11 @@ export interface CustomerBooking {
   advancePaid: number;
   balanceDue: number;
   securityDeposit: number;
-  status: "confirmed" | "completed" | "cancelled" | "refunded";
+  status: "confirmed" | "pending_approval" | "completed" | "cancelled" | "refunded" | "rejected";
+  paymentGateway?: "razorpay" | "direct_upi";
+  utrNumber?: string;
+  paymentProofUrl?: string;
+  paymentStatus?: string;
   cancellationPolicy: {
     refundableUntilDate: string;
     refundPercentage: number;

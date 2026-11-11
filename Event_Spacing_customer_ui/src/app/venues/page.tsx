@@ -19,7 +19,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { Venue, VenueFilterState } from "@/types/venue";
-import { MOCK_VENUES } from "@/data/mockVenues";
 import { EVENT_CATEGORIES } from "@/data/mockCategories";
 import { FilterSidebar } from "@/components/venues/FilterSidebar";
 import { SortHeader } from "@/components/venues/SortHeader";

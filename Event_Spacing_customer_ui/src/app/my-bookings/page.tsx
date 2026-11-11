@@ -228,10 +228,12 @@ export default function CustomerBookingsPage() {
                                 ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                                 : isCancelled
                                 ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                : booking.status === "pending_approval"
+                                ? "bg-amber-100 text-amber-800 border border-amber-300"
                                 : "bg-blue-100 text-blue-800 border border-blue-200"
                             }`}
                           >
-                            {booking.status}
+                            {booking.status === "pending_approval" ? "Pending Admin Approval" : booking.status}
                           </span>
                         </div>
 

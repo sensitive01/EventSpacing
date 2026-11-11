@@ -37,7 +37,6 @@ import {
   Lock,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { MOCK_VENUES } from "@/data/mockVenues";
 import { StarRating } from "@/components/common/StarRating";
 import { Badge } from "@/components/common/Badge";
 import { PaymentGatewayModal } from "@/components/booking/PaymentGatewayModal";
@@ -207,7 +206,7 @@ export default function VenueDetailsClient() {
           <p className="font-serif text-lg font-bold text-[#380c48]">
             Loading Venue Details...
           </p>
-          <p className="text-xs text-gray-500">Connecting to MongoDB Atlas</p>
+          <p className="text-xs text-gray-500">Connecting</p>
         </div>
       </div>
     );
@@ -357,6 +356,12 @@ export default function VenueDetailsClient() {
     transactionId: string;
     paymentMethod: string;
     amountPaid: number;
+    paymentGateway?: "razorpay" | "direct_upi";
+    utrNumber?: string;
+    paymentProofUrl?: string;
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    razorpaySignature?: string;
   }) => {
     setIsBookingSubmitting(true);
     setBookingError("");
@@ -376,6 +381,12 @@ export default function VenueDetailsClient() {
         specialRequests: bookSpecialNotes || undefined,
         transactionId: paymentData.transactionId,
         paymentMethod: paymentData.paymentMethod,
+        paymentGateway: paymentData.paymentGateway || "direct_upi",
+        utrNumber: paymentData.utrNumber,
+        paymentProofUrl: paymentData.paymentProofUrl,
+        razorpayOrderId: paymentData.razorpayOrderId,
+        razorpayPaymentId: paymentData.razorpayPaymentId,
+        razorpaySignature: paymentData.razorpaySignature,
       };
 
       const res = await api.bookings.create(payload);

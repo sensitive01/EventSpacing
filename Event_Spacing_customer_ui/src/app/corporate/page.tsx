@@ -30,7 +30,6 @@ import {
   Clock,
   Layers,
 } from "lucide-react";
-import { MOCK_VENUES } from "@/data/mockVenues";
 import { api } from "@/lib/api";
 
 /**

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { Booking } from "../models/Booking";
 import { Venue } from "../models/Venue";
+import { PlatformSettings } from "../models/Settings";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { venueCalendarOverrides } from "./vendorPortal.controller";
 
@@ -25,6 +26,12 @@ export const createBooking = async (
       specialRequests,
       transactionId,
       paymentMethod,
+      paymentGateway = "direct_upi",
+      utrNumber,
+      paymentProofUrl,
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
     } = req.body;
 
     const venue = await Venue.findById(venueId);
@@ -100,6 +107,21 @@ export const createBooking = async (
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const bookingRef = `ES-BLR-2026-${randomSuffix}`;
 
+    const isDirectUpi = paymentGateway === "direct_upi";
+
+    // Validate if Direct UPI mode is allowed by platform administrator
+    if (isDirectUpi) {
+      const platformSettings = await PlatformSettings.findOne({ key: "platform_config" });
+      if (platformSettings?.upiSettings && platformSettings.upiSettings.isEnabled === false) {
+        res.status(400).json({
+          success: false,
+          message:
+            "Direct UPI payment mode is currently paused by platform administrator. Please complete payment via online payment gateway.",
+        });
+        return;
+      }
+    }
+
     const booking = await Booking.create({
       bookingRef,
       userId: req.user ? req.user._id : undefined,
@@ -118,7 +140,10 @@ export const createBooking = async (
       advancePaid,
       balanceDue,
       securityDeposit,
-      status: "confirmed",
+      status: isDirectUpi ? "pending_approval" : "confirmed",
+      paymentStatus: isDirectUpi ? "verification_pending" : "paid",
+      utrNumber: utrNumber || transactionId,
+      paymentProofUrl,
       cancellationPolicy: {
         refundableUntilDate: "14 days prior to event",
         refundPercentage: 85,
@@ -129,36 +154,44 @@ export const createBooking = async (
       customerPhone,
       customerEmail,
       specialRequests,
+      paymentGateway,
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
       paymentDetails: {
-        transactionId: transactionId || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`,
-        paymentMethod: paymentMethod || "UPI",
+        transactionId: transactionId || utrNumber || `TXN_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`,
+        paymentMethod: paymentMethod || (isDirectUpi ? "Direct UPI (QR Payment)" : "Razorpay Gateway"),
         paidAt: new Date(),
         invoiceNumber: `INV-2026-${randomSuffix}`,
       },
     });
 
-    // Automatically lock date slot in venue calendar
-    const venueKey = venue._id.toString();
-    if (!venueCalendarOverrides[venueKey]) {
-      venueCalendarOverrides[venueKey] = [];
-    }
-    const existingSlotIdx = venueCalendarOverrides[venueKey].findIndex((s) => s.date === eventDate);
-    const slotEntry = {
-      date: eventDate,
-      status: "booked",
-      bookedBy: customerName,
-      bookingRef,
-      notes: `Confirmed: ${packageTitle} (${guestCount} guests)`,
-    };
-    if (existingSlotIdx >= 0) {
-      venueCalendarOverrides[venueKey][existingSlotIdx] = slotEntry;
-    } else {
-      venueCalendarOverrides[venueKey].push(slotEntry);
+    // If online verified (e.g. Razorpay), lock date slot in venue calendar immediately
+    if (!isDirectUpi) {
+      const venueKey = venue._id.toString();
+      if (!venueCalendarOverrides[venueKey]) {
+        venueCalendarOverrides[venueKey] = [];
+      }
+      const existingSlotIdx = venueCalendarOverrides[venueKey].findIndex((s) => s.date === eventDate);
+      const slotEntry = {
+        date: eventDate,
+        status: "booked",
+        bookedBy: customerName,
+        bookingRef,
+        notes: `Confirmed: ${packageTitle} (${guestCount} guests)`,
+      };
+      if (existingSlotIdx >= 0) {
+        venueCalendarOverrides[venueKey][existingSlotIdx] = slotEntry;
+      } else {
+        venueCalendarOverrides[venueKey].push(slotEntry);
+      }
     }
 
     res.status(201).json({
       success: true,
-      message: `Booking ${bookingRef} has been confirmed successfully!`,
+      message: isDirectUpi
+        ? `Booking request ${bookingRef} received! Pending admin verification of your UPI transfer.`
+        : `Booking ${bookingRef} has been confirmed successfully!`,
       data: booking,
     });
   } catch (error) {
@@ -262,6 +295,145 @@ export const cancelBooking = async (
     res.status(200).json({
       success: true,
       message: `Booking ${booking.bookingRef} has been cancelled. Refund processing initiated as per policy terms.`,
+      data: booking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin: Fetch all bookings pending Direct UPI payment verification
+ */
+export const getPendingApprovals = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const bookings = await Booking.find({
+      $or: [
+        { status: "pending_approval" },
+        { paymentGateway: "direct_upi", paymentStatus: "verification_pending" },
+      ],
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      data: bookings,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin: Approve Direct UPI advance payment and confirm reservation
+ */
+export const approveBookingPayment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const id = (req.params.id as string) || "";
+    let booking = null;
+    if (id.startsWith("ES-")) {
+      booking = await Booking.findOne({ bookingRef: id });
+    } else if (mongoose.isValidObjectId(id)) {
+      booking = await Booking.findById(id);
+    } else {
+      booking = await Booking.findOne({ bookingRef: id });
+    }
+
+    if (!booking) {
+      res.status(404).json({ success: false, message: "Booking not found." });
+      return;
+    }
+
+    booking.status = "confirmed";
+    booking.paymentStatus = "paid";
+    booking.approvedAt = new Date();
+    booking.approvedBy = req.body.approvedBy || "Operations SuperAdmin";
+    booking.adminApprovalNotes = req.body.notes || "Approved via Admin Control Deck";
+
+    // Ensure invoice number
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    if (!booking.paymentDetails) {
+      booking.paymentDetails = {
+        paidAt: new Date(),
+        invoiceNumber: `INV-2026-${randomSuffix}`,
+        paymentMethod: "Direct UPI (Approved)",
+      };
+    } else if (!booking.paymentDetails.invoiceNumber) {
+      booking.paymentDetails.invoiceNumber = `INV-2026-${randomSuffix}`;
+    }
+
+    await booking.save();
+
+    // Lock date slot in venue calendar overrides
+    const venueKey = booking.venueId.toString();
+    if (!venueCalendarOverrides[venueKey]) {
+      venueCalendarOverrides[venueKey] = [];
+    }
+    const existingSlotIdx = venueCalendarOverrides[venueKey].findIndex((s) => s.date === booking.eventDate);
+    const slotEntry = {
+      date: booking.eventDate,
+      status: "booked",
+      bookedBy: booking.customerName,
+      bookingRef: booking.bookingRef,
+      notes: `Confirmed: ${booking.packageTitle} (${booking.guestCount} guests)`,
+    };
+    if (existingSlotIdx >= 0) {
+      venueCalendarOverrides[venueKey][existingSlotIdx] = slotEntry;
+    } else {
+      venueCalendarOverrides[venueKey].push(slotEntry);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Booking ${booking.bookingRef} payment approved and reservation confirmed!`,
+      data: booking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin: Reject Direct UPI payment
+ */
+export const rejectBookingPayment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const id = (req.params.id as string) || "";
+    let booking = null;
+    if (id.startsWith("ES-")) {
+      booking = await Booking.findOne({ bookingRef: id });
+    } else if (mongoose.isValidObjectId(id)) {
+      booking = await Booking.findById(id);
+    } else {
+      booking = await Booking.findOne({ bookingRef: id });
+    }
+
+    if (!booking) {
+      res.status(404).json({ success: false, message: "Booking not found." });
+      return;
+    }
+
+    booking.status = "rejected";
+    booking.paymentStatus = "failed";
+    booking.adminApprovalNotes =
+      req.body.reason || "Payment proof verification could not be validated with bank.";
+    await booking.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Booking ${booking.bookingRef} payment rejected.`,
       data: booking,
     });
   } catch (error) {

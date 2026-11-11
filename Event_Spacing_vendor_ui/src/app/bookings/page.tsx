@@ -400,7 +400,7 @@ export default function VendorBookingsPage() {
             <p className="font-serif text-lg font-bold text-gray-800">
               Loading Reservations...
             </p>
-            <p className="text-xs text-gray-400">Fetching live bookings from MongoDB Atlas</p>
+            <p className="text-xs text-gray-400">Fetching live bookings</p>
           </div>
         ) : filteredAndSortedBookings.length === 0 ? (
           <div className="bg-white rounded-3xl p-12 text-center border border-gray-200 space-y-4">
@@ -592,6 +592,15 @@ export default function VendorBookingsPage() {
                               <span className="text-[10px] text-gray-500 block">
                                 Balance: ₹{b.balanceDue.toLocaleString()}
                               </span>
+                              {(b as any).paymentGateway === "razorpay" ? (
+                                <span className="inline-block text-[9px] px-1.5 py-0.5 rounded font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                  Razorpay Gateway
+                                </span>
+                              ) : (
+                                <span className="inline-block text-[9px] px-1.5 py-0.5 rounded font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                                  Direct Token
+                                </span>
+                              )}
                             </div>
                           </td>
 

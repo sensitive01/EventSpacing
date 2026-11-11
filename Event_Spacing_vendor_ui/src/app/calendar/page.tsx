@@ -621,7 +621,7 @@ export default function VendorCalendarPage() {
                     <span>Protected Confirmed Slot</span>
                   </div>
                   <p className="text-[11px] text-purple-800 leading-relaxed">
-                    This date has a confirmed booking in MongoDB Atlas with a verified advance token. It cannot be directly unblocked or modified here to prevent accidental double-bookings.
+                    This date has a confirmed booking with a verified advance token. It cannot be directly unblocked or modified here to prevent accidental double-bookings.
                   </p>
                 </div>
 

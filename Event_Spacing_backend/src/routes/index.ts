@@ -6,6 +6,9 @@ import inquiryRoutes from "./inquiry.routes";
 import vendorRoutes from "./vendor.routes";
 import vendorPortalRoutes from "./vendorPortal.routes";
 import categoryRoutes from "./category.routes";
+import paymentRoutes from "./payment.routes";
+import settingsRoutes from "./settings.routes";
+import adminRoutes from "./admin.routes";
 
 const router = Router();
 
@@ -16,6 +19,9 @@ router.use("/inquiries", inquiryRoutes);
 router.use("/vendors", vendorRoutes);
 router.use("/vendor-portal", vendorPortalRoutes);
 router.use("/categories", categoryRoutes);
+router.use("/payments", paymentRoutes);
+router.use("/settings", settingsRoutes);
+router.use("/admin", adminRoutes);
 
 export default router;
 
