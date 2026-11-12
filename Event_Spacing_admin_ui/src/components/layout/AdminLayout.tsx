@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Building2,
   Users,
+  UserCog,
   Layers,
   Receipt,
   Bell,
@@ -57,6 +58,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     },
     { name: "Venue Catalog", href: "/venues", icon: Building2 },
     { name: "Vendor Partners", href: "/vendors", icon: Users },
+    { name: "All Users", href: "/users", icon: UserCog },
     { name: "Master Taxonomies", href: "/master-data", icon: Layers },
     { name: "Transactions & GMV", href: "/transactions", icon: Receipt },
   ];

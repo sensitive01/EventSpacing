@@ -13,12 +13,15 @@ import {
   Phone,
   Mail,
   Heart,
+  ShoppingBag,
+  Gift,
   User,
   Menu,
   X,
   ChevronDown,
 } from "lucide-react";
 import { Logo } from "./Logo";
+import { useBookingCart } from "@/context/CartContext";
 
 /**
  * Master navigation items for Event Spacing.
@@ -207,6 +210,7 @@ function NavLinks(props: NavLinksProps) {
  */
 export const Header: React.FC = () => {
   const pathname = usePathname();
+  const { count: cartCount } = useBookingCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState("Bengaluru, Karnataka");
   const [currentUser, setCurrentUser] = useState<{ name?: string; role?: string } | null>(null);
@@ -318,12 +322,14 @@ export const Header: React.FC = () => {
               List Your Venue
             </Link>
             <span className="text-white/30">|</span>
-            <Link
-              href="/list-your-venue"
+            <a
+              href={`${process.env.NEXT_PUBLIC_VENDOR_HUB_URL || "http://localhost:3001"}/signin`}
+              target="_blank"
+              rel="noreferrer"
               className="hover:text-gold-300 transition-colors"
             >
               Become a Vendor
-            </Link>
+            </a>
             <span className="text-white/30">|</span>
             <Link href="/#faq" className="hover:text-gold-300 transition-colors">
               Help
@@ -345,8 +351,31 @@ export const Header: React.FC = () => {
           {/* Center Navigation Links (Deep Purple Text) */}
           <NavLinks />
 
-          {/* Right Section: Heart Wishlist + Sign In + Gold CTA */}
-          <div className="hidden sm:flex items-center gap-6">
+          {/* Right Section: Booking Cart + Heart + Sign In + Gold CTA */}
+          <div className="hidden sm:flex items-center gap-4">
+            {/* Booking Preview Cart */}
+            <Link
+              href="/cart"
+              className="relative text-[#380c48] hover:text-gold-600 transition-colors p-1.5"
+              title="Booking Preview Cart"
+            >
+              <ShoppingBag className="w-5 h-5 stroke-[2]" />
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e5a83b] text-[#240b2e] text-[10px] font-extrabold flex items-center justify-center shadow-xs">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Refer & Earn */}
+            <Link
+              href="/refer-and-earn"
+              className="text-[#380c48] hover:text-gold-600 transition-colors p-1.5"
+              title="Refer & Earn"
+            >
+              <Gift className="w-5 h-5 stroke-[2]" />
+            </Link>
+
             {/* Wishlist Heart Icon */}
             <Link
               href="/venues"
@@ -396,6 +425,18 @@ export const Header: React.FC = () => {
 
           {/* Mobile Menu Hamburger Button */}
           <div className="flex items-center gap-2 sm:gap-3 lg:hidden">
+            <Link
+              href="/cart"
+              className="relative p-1.5 text-[#380c48]"
+              title="Booking Cart"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#e5a83b] text-[#240b2e] text-[9px] font-extrabold flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
             <Link
               href="/list-your-venue"
               className="bg-[#e5a83b] text-[#240b2e] font-bold text-xs px-3 py-1.5 rounded-md sm:hidden shadow-xs"

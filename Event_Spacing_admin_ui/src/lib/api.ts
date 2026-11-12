@@ -9,7 +9,7 @@ const API_BASE_URL =
 async function request<T = any>(
   endpoint: string,
   options: RequestInit = {}
-): Promise<{ success: boolean; data: T; message?: string; count?: number }> {
+): Promise<{ success: boolean; data: T; message?: string; count?: number; summary?: any }> {
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
   const headers = {
     "Content-Type": "application/json",
@@ -44,6 +44,33 @@ export const api = {
       request(`/admin/venues/${id}/approve`, { method: "PUT" }),
     rejectVenue: (id: string) =>
       request(`/admin/venues/${id}/reject`, { method: "PUT" }),
+    getUsers: () => request<any[]>("/admin/users"),
+    getUserById: (id: string) => request<any>(`/admin/users/${id}`),
+    updateUser: (id: string, data: Record<string, any>) =>
+      request<any>(`/admin/users/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    toggleUserBlock: (id: string, data: { isBlocked: boolean; blockedReason?: string }) =>
+      request<any>(`/admin/users/${id}/block`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteUser: (id: string) =>
+      request(`/admin/users/${id}`, { method: "DELETE" }),
+    getVendors: () => request<any[]>("/admin/vendors"),
+    updateVendorPartner: (userId: string, data: Record<string, any>) =>
+      request<any>(`/admin/vendors/partner/${userId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    updateVendor: (id: string, data: Record<string, any>) =>
+      request<any>(`/admin/vendors/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteVendor: (id: string) =>
+      request(`/admin/vendors/${id}`, { method: "DELETE" }),
   },
   venues: {
     getAll: () => request<any[]>("/venues"),

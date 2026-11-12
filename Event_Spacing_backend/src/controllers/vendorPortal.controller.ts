@@ -7,6 +7,7 @@ import { Venue, IVenue } from "../models/Venue";
 import { Vendor, IVendor } from "../models/Vendor";
 import { Inquiry } from "../models/Inquiry";
 import { Booking } from "../models/Booking";
+import { createBookingRecord, resolveAndValidateBookingItem } from "./booking.controller";
 
 // In-memory slot storage for dynamic calendar slot blocking if no separate collection
 export const venueCalendarOverrides: Record<string, any[]> = {};
@@ -1230,26 +1231,42 @@ export const getVendorBookings = async (
       return;
     }
 
-    const venues = await Venue.find({
-      $or: [
-        { vendorId: user._id },
-        ...(user.businessName ? [{ businessName: user.businessName }] : []),
-      ],
-    });
+    const [venues, services] = await Promise.all([
+      Venue.find({
+        $or: [
+          { vendorId: user._id },
+          ...(user.businessName ? [{ businessName: user.businessName }] : []),
+        ],
+      }),
+      Vendor.find({
+        $or: [
+          { vendorId: user._id },
+          ...(user.phone ? [{ phone: new RegExp(`${user.phone.slice(-10)}$`) }] : []),
+          ...(user.businessName ? [{ businessName: user.businessName }] : []),
+        ],
+      }),
+    ]);
 
     const venueIds = venues.map((v) => v._id);
-    if (venueIds.length === 0) {
+    const serviceIds = services.map((s) => s._id);
+
+    if (venueIds.length === 0 && serviceIds.length === 0) {
       res.status(200).json({ success: true, count: 0, data: [] });
       return;
     }
 
     const { status, venueId } = req.query;
-    const query: any = { venueId: { $in: venueIds } };
+    const ownerConditions: any[] = [];
+    if (venueIds.length > 0) ownerConditions.push({ venueId: { $in: venueIds } });
+    if (serviceIds.length > 0) ownerConditions.push({ vendorServiceId: { $in: serviceIds } });
+
+    const query: any =
+      venueId && venueId !== "all"
+        ? { venueId }
+        : { $or: ownerConditions };
+
     if (status && status !== "all") {
       query.status = status;
-    }
-    if (venueId && venueId !== "all") {
-      query.venueId = venueId;
     }
 
     const bookings = await Booking.find(query).sort({ createdAt: -1 });
@@ -1290,6 +1307,146 @@ export const updateVendorBookingStatus = async (
     res.status(200).json({
       success: true,
       message: `Reservation status updated to ${status}`,
+      data: booking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 20. Booking Management: Create a walk-in / manual booking directly by Vendor Partner
+ * POST /api/vendor-portal/bookings
+ */
+export const createVendorBooking = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = await resolveVendorUser(req);
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        message: "Vendor authentication required to record a walk-in booking.",
+      });
+      return;
+    }
+
+    const {
+      bookingType,
+      venueId,
+      vendorServiceId,
+      selectedSpaceName,
+      packageTitle,
+      eventCategory = "Marriage / Wedding",
+      eventDate,
+      timeSlot = "Full Day (8 AM - 11 PM)",
+      guestCount = 150,
+      customerName,
+      customerPhone,
+      customerEmail,
+      advancePaid,
+      paymentMethod = "Walk-in / Offline Payment",
+      specialRequests,
+    } = req.body;
+
+    if (!customerName || String(customerName).trim().length < 2) {
+      res.status(400).json({ success: false, message: "Customer name is required." });
+      return;
+    }
+    if (!customerPhone || String(customerPhone).replace(/\D/g, "").length < 10) {
+      res.status(400).json({ success: false, message: "Valid 10-digit customer phone is required." });
+      return;
+    }
+    if (!eventDate) {
+      res.status(400).json({ success: false, message: "Event date is required." });
+      return;
+    }
+
+    const isServiceBooking =
+      bookingType === "service" || (Boolean(vendorServiceId) && !venueId);
+
+    // Ensure vendor owns the target listing
+    if (isServiceBooking) {
+      const ownedService = vendorServiceId
+        ? await Vendor.findOne({
+            _id: vendorServiceId,
+            $or: [
+              { vendorId: user._id },
+              ...(user.phone ? [{ phone: new RegExp(`${user.phone.slice(-10)}$`) }] : []),
+              ...(user.businessName ? [{ businessName: user.businessName }] : []),
+            ],
+          })
+        : null;
+
+      if (!ownedService) {
+        res.status(403).json({
+          success: false,
+          message: "You can only create walk-in bookings for your own Marketplace services.",
+        });
+        return;
+      }
+    } else {
+      const ownedVenue = venueId
+        ? await Venue.findOne({
+            _id: venueId,
+            $or: [
+              { vendorId: user._id },
+              ...(user.businessName ? [{ businessName: user.businessName }] : []),
+            ],
+          })
+        : null;
+
+      if (!ownedVenue) {
+        res.status(403).json({
+          success: false,
+          message: "You can only create walk-in bookings for your own venues.",
+        });
+        return;
+      }
+    }
+
+    const outcome = await resolveAndValidateBookingItem({
+      bookingType: isServiceBooking ? "service" : "venue",
+      venueId,
+      vendorServiceId,
+      selectedSpaceName,
+      packageTitle,
+      eventCategory,
+      eventDate,
+      timeSlot,
+      guestCount: Number(guestCount) || 100,
+    });
+
+    if (!outcome.ok) {
+      res.status(outcome.status).json(outcome.payload);
+      return;
+    }
+
+    const parsedAdvance =
+      advancePaid !== undefined && advancePaid !== "" && !isNaN(Number(advancePaid))
+        ? Number(advancePaid)
+        : undefined;
+
+    const booking = await createBookingRecord(outcome.data, {
+      bookingSource: "walk_in",
+      customerName: String(customerName).trim(),
+      customerPhone: String(customerPhone).trim(),
+      customerEmail:
+        customerEmail && String(customerEmail).includes("@")
+          ? String(customerEmail).trim()
+          : `${String(customerPhone).replace(/\D/g, "").slice(-10)}@walkin.eventspacing.com`,
+      specialRequests: specialRequests ? String(specialRequests).trim() : undefined,
+      paymentGateway: "direct_upi",
+      paymentMethod: String(paymentMethod || "Walk-in / Offline Payment"),
+      overrideAdvancePaid: parsedAdvance,
+      forceConfirmed: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Walk-in booking ${booking.bookingRef} confirmed and slot locked!`,
       data: booking,
     });
   } catch (error) {

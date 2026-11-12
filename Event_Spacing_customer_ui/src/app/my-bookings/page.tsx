@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Calendar,
   Clock,
@@ -14,20 +15,16 @@ import {
   ShieldCheck,
   X,
   Loader2,
-  LogIn,
-  Ban,
   ArrowRight,
 } from "lucide-react";
 import { CustomerBooking } from "@/types/venue";
 import { api } from "@/lib/api";
 
-const MOCK_CUSTOMER_BOOKINGS: CustomerBooking[] = [];
-
 export default function CustomerBookingsPage() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<CustomerBooking | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string>("");
@@ -35,49 +32,66 @@ export default function CustomerBookingsPage() {
   useEffect(() => {
     let isCancelled = false;
 
+    const redirectToLogin = () => {
+      if (!isCancelled) {
+        setIsAuthorized(false);
+        router.replace("/signin?redirect=/my-bookings");
+      }
+    };
+
     const loadBookings = async () => {
-      setIsLoading(true);
-      const token = typeof window !== "undefined" ? localStorage.getItem("es_auth_token") : null;
-      const userRaw = typeof window !== "undefined" ? localStorage.getItem("es_user") : null;
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("es_auth_token") : null;
 
-      if (token) {
-        setIsLoggedIn(true);
-        if (userRaw) {
-          try {
-            const u = JSON.parse(userRaw);
-            setUserName(u.name || "Customer");
-          } catch {}
-        }
-
-        try {
-          const res = await api.bookings.getMyBookings();
-          if (!isCancelled && res.data) {
-            const mapped: CustomerBooking[] = res.data.map((b: any) => ({
-              ...b,
-              id: b.id || b._id,
-            }));
-            setBookings(mapped);
-            setIsLoading(false);
-            return;
-          }
-        } catch (err) {
-          console.warn("Could not fetch user bookings from API, using fallback:", err);
-        }
+      if (!token) {
+        redirectToLogin();
+        return;
       }
 
-      // Guest or Fallback
+      setIsAuthorized(true);
+      setIsLoading(true);
+
+      try {
+        const res = await api.bookings.getMyBookings();
+        if (!isCancelled && res.data) {
+          const mapped: CustomerBooking[] = res.data.map((b: any) => ({
+            ...b,
+            id: b.id || b._id,
+          }));
+          setBookings(mapped);
+          setIsLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        if (err?.status === 401) {
+          redirectToLogin();
+          return;
+        }
+        console.warn("Could not fetch user bookings from API:", err);
+      }
+
       if (!isCancelled) {
         setBookings([]);
         setIsLoading(false);
       }
     };
 
+    const handleAuthSync = () => {
+      if (typeof window !== "undefined" && !localStorage.getItem("es_auth_token")) {
+        redirectToLogin();
+      }
+    };
+
     loadBookings();
+    window.addEventListener("auth-change", handleAuthSync);
+    window.addEventListener("storage", handleAuthSync);
 
     return () => {
       isCancelled = true;
+      window.removeEventListener("auth-change", handleAuthSync);
+      window.removeEventListener("storage", handleAuthSync);
     };
-  }, []);
+  }, [router]);
 
   const handleCancelBooking = async (booking: CustomerBooking) => {
     if (!confirm(`Are you sure you want to cancel booking ${booking.bookingRef}? Refund terms will apply.`)) {
@@ -103,6 +117,19 @@ export default function CustomerBookingsPage() {
     }
   };
 
+  if (!isAuthorized) {
+    return (
+      <div className="w-full bg-[#fbf9fc] min-h-screen flex items-center justify-center px-4">
+        <div className="text-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-brand-900 mx-auto" />
+          <p className="text-sm font-semibold text-gray-700">
+            Redirecting to Sign In...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full bg-[#fbf9fc] min-h-screen pb-20">
       {/* 1. Header Banner */}
@@ -120,35 +147,8 @@ export default function CustomerBookingsPage() {
               Track reservation status, download GST digital tax invoices, view slot timings, and inspect cancellation refund terms.
             </p>
           </div>
-
-          {!isLoggedIn && (
-            <Link
-              href="/signin"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold-500 hover:bg-gold-600 text-brand-950 font-bold text-xs shadow-md transition-colors self-start md:self-auto"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>Sign In to Your Account</span>
-            </Link>
-          )}
         </div>
       </div>
-
-      {/* Guest Notice Banner if not logged in */}
-      {!isLoggedIn && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6">
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-900">
-            <div>
-              <strong>Currently Viewing Sample Preview Bookings.</strong> Sign in with your registered account to manage your real reservations.
-            </div>
-            <Link
-              href="/signin"
-              className="font-bold underline text-[#380c48] hover:text-black shrink-0"
-            >
-              Sign In Now →
-            </Link>
-          </div>
-        </div>
-      )}
 
       {/* Success Notification */}
       {actionSuccess && (

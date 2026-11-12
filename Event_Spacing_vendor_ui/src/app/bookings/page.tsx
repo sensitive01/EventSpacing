@@ -266,10 +266,18 @@ export default function VendorBookingsPage() {
             </button>
 
             <Link
-              href="/calendar"
+              href="/bookings/new"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-gold-500 to-amber-500 hover:from-gold-600 hover:to-amber-600 text-brand-950 font-bold text-xs shadow-md transition-all"
             >
               <Calendar className="w-4 h-4 text-brand-950" />
+              <span>+ New Walk-In Booking</span>
+            </Link>
+
+            <Link
+              href="/calendar"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs transition-all"
+            >
+              <Calendar className="w-4 h-4 text-gold-300" />
               <span>Availability Calendar</span>
             </Link>
           </div>

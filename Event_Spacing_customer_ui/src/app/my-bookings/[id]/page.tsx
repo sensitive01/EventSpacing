@@ -35,6 +35,7 @@ export default function BookingDetailPage() {
 
   const [booking, setBooking] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [error, setError] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelSuccess, setCancelSuccess] = useState("");
@@ -42,6 +43,26 @@ export default function BookingDetailPage() {
 
   useEffect(() => {
     let isCancelled = false;
+
+    const redirectToLogin = () => {
+      if (!isCancelled) {
+        setIsAuthorized(false);
+        const target = id ? `/my-bookings/${id}` : "/my-bookings";
+        router.replace(`/signin?redirect=${encodeURIComponent(target)}`);
+      }
+    };
+
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("es_auth_token") : null;
+
+    if (!token) {
+      redirectToLogin();
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    setIsAuthorized(true);
     setIsLoading(true);
     setError("");
 
@@ -54,6 +75,10 @@ export default function BookingDetailPage() {
           return;
         }
       } catch (err: any) {
+        if (err?.status === 401) {
+          redirectToLogin();
+          return;
+        }
         console.warn("Failed to fetch booking by ID:", err);
       }
 
@@ -63,14 +88,25 @@ export default function BookingDetailPage() {
       }
     };
 
+    const handleAuthSync = () => {
+      if (typeof window !== "undefined" && !localStorage.getItem("es_auth_token")) {
+        redirectToLogin();
+      }
+    };
+
     if (id) {
       fetchBooking();
     }
 
+    window.addEventListener("auth-change", handleAuthSync);
+    window.addEventListener("storage", handleAuthSync);
+
     return () => {
       isCancelled = true;
+      window.removeEventListener("auth-change", handleAuthSync);
+      window.removeEventListener("storage", handleAuthSync);
     };
-  }, [id]);
+  }, [id, router]);
 
   const handlePrint = () => {
     if (typeof window !== "undefined") {
@@ -107,6 +143,19 @@ export default function BookingDetailPage() {
       setIsCancelling(false);
     }
   };
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-[#fbf9fc] flex items-center justify-center py-20">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-gold-400 border-t-[#380c48] rounded-full animate-spin mx-auto" />
+          <p className="font-serif text-lg font-bold text-[#380c48]">
+            Redirecting to Sign In...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -468,7 +517,9 @@ export default function BookingDetailPage() {
                   <div className="py-2 flex justify-between">
                     <div>
                       <span className="font-semibold text-gray-800 block">
-                        Venue Space Rental
+                        {booking.bookingType === "service"
+                          ? "Marketplace Event Service"
+                          : "Venue Space Rental"}
                       </span>
                       <span className="text-[10px] text-gray-500">
                         {booking.selectedSpaceName} ({booking.timeSlot})
@@ -484,12 +535,14 @@ export default function BookingDetailPage() {
                     <span className="text-emerald-700 font-medium">Included (18%)</span>
                   </div>
 
-                  <div className="py-2 flex justify-between text-gray-600">
-                    <span>Refundable Security Deposit</span>
-                    <span className="font-semibold text-gray-900">
-                      ₹{booking.securityDeposit?.toLocaleString() || "25,000"}
-                    </span>
-                  </div>
+                  {(booking.securityDeposit ?? 0) > 0 && (
+                    <div className="py-2 flex justify-between text-gray-600">
+                      <span>Refundable Security Deposit</span>
+                      <span className="font-semibold text-gray-900">
+                        ₹{booking.securityDeposit.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="py-3 flex justify-between items-center text-sm font-bold border-t-2 border-gray-200">
                     <span>Total Package Valuation</span>

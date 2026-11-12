@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createBooking,
+  checkoutCart,
   getMyBookings,
   getBookingById,
   cancelBooking,
@@ -8,13 +9,14 @@ import {
   approveBookingPayment,
   rejectBookingPayment,
 } from "../controllers/booking.controller";
-import { protect, optionalAuth } from "../middleware/auth.middleware";
+import { protect } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
-import { createBookingSchema } from "../validators/booking.validator";
+import { checkoutCartSchema, createBookingSchema } from "../validators/booking.validator";
 
 const router = Router();
 
-router.post("/", optionalAuth, validate({ body: createBookingSchema }), createBooking);
+router.post("/", protect, validate({ body: createBookingSchema }), createBooking);
+router.post("/checkout-cart", protect, validate({ body: checkoutCartSchema }), checkoutCart);
 router.get("/pending-approvals", getPendingApprovals);
 router.get("/my-bookings", protect, getMyBookings);
 router.put("/:id/approve", approveBookingPayment);

@@ -47,12 +47,14 @@ export default function VendorSignInPage() {
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [countdown, setCountdown] = useState(30);
 
-  // Email / Password Form States
+  // Email / Phone + Password Form States
+  const [passwordLoginBy, setPasswordLoginBy] = useState<"phone" | "email">("phone");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [gstNumber, setGstNumber] = useState("");
+  const [referralCodeInput, setReferralCodeInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -174,7 +176,13 @@ export default function VendorSignInPage() {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!email || !password) {
+    const cleanPhone = phoneNumber.replace(/\D/g, "");
+    if (authMode === "signin" && passwordLoginBy === "phone") {
+      if (cleanPhone.length < 10 || !password) {
+        setErrorMessage("Please provide a valid 10-digit mobile number and password.");
+        return;
+      }
+    } else if (!email || !password) {
       setErrorMessage("Please provide your partner email address and password.");
       return;
     }
@@ -184,14 +192,19 @@ export default function VendorSignInPage() {
     try {
       let res;
       if (authMode === "signin") {
-        res = await api.auth.login({ email, password });
+        res = await api.auth.login(
+          passwordLoginBy === "phone"
+            ? { phone: cleanPhone, password }
+            : { email, password }
+        );
       } else {
         res = await api.auth.register({
           name: fullName || "Partner Host",
           email,
           password,
-          phone: phoneNumber,
+          phone: cleanPhone || phoneNumber,
           companyName: businessName,
+          referralCode: referralCodeInput.trim() || undefined,
         });
       }
 
@@ -447,7 +460,7 @@ export default function VendorSignInPage() {
                 }`}
               >
                 <Mail className="w-4 h-4 text-gold-600" />
-                <span>Partner Email &amp; Password</span>
+                <span>Password Login (Phone / Email)</span>
               </button>
             </div>
 
@@ -628,53 +641,130 @@ export default function VendorSignInPage() {
               /* ================= Email & Password Form Flow ================= */
               <form onSubmit={handleEmailAuth} className="space-y-4">
                 {authMode === "register" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">
-                        Owner / Manager Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Vikramaditya Rao"
-                        className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-900 bg-white"
-                      />
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Owner / Manager Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="e.g. Vikramaditya Rao"
+                          className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-900 bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                          Venue or Business Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={businessName}
+                          onChange={(e) => setBusinessName(e.target.value)}
+                          placeholder="e.g. Prestige Hospitality"
+                          className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-900 bg-white"
+                        />
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">
-                        Venue or Business Name *
+                        Partner Referral Code (Optional)
                       </label>
                       <input
                         type="text"
-                        required
-                        value={businessName}
-                        onChange={(e) => setBusinessName(e.target.value)}
-                        placeholder="e.g. Prestige Hospitality"
-                        className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-900 bg-white"
+                        value={referralCodeInput}
+                        onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                        placeholder="e.g. ESRAG4F12"
+                        className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-900 bg-white font-mono uppercase"
                       />
                     </div>
+                  </>
+                )}
+
+                {authMode === "signin" && (
+                  <div className="flex items-center gap-2 bg-[#faf7fb] p-1 rounded-xl border border-gray-200 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setPasswordLoginBy("phone")}
+                      className={`flex-1 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        passwordLoginBy === "phone"
+                          ? "bg-brand-900 text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Phone + Password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPasswordLoginBy("email")}
+                      className={`flex-1 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        passwordLoginBy === "email"
+                          ? "bg-brand-900 text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Email + Password
+                    </button>
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Registered Business Email *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="partner@prestigevenues.com"
-                      className="w-full text-xs pl-3.5 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-900 bg-white"
-                    />
-                    <Mail className="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                {authMode === "signin" && passwordLoginBy === "phone" ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-gray-700">
+                        Registered Mobile Number *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginMethod("phone");
+                          setOtpSent(false);
+                        }}
+                        className="text-[11px] font-bold text-brand-900 hover:text-gold-600 underline cursor-pointer"
+                      >
+                        Use OTP instead
+                      </button>
+                    </div>
+                    <div className="flex items-center rounded-xl border border-gray-200 focus-within:border-brand-900 bg-white overflow-hidden">
+                      <div className="flex items-center gap-1.5 px-3.5 py-3 bg-gray-50 border-r border-gray-200 text-xs font-bold text-gray-700 select-none">
+                        <span>🇮🇳</span>
+                        <span>+91</span>
+                      </div>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
+                        placeholder="98450 12345"
+                        className="w-full text-xs px-3.5 py-3 focus:outline-none tracking-wider font-semibold text-gray-900"
+                      />
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                      Registered Business Email *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="partner@prestigevenues.com"
+                        className="w-full text-xs pl-3.5 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-900 bg-white"
+                      />
+                      <Mail className="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className="flex items-center justify-between mb-1">

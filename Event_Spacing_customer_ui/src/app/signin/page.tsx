@@ -12,15 +12,14 @@ import { useRouter } from "next/navigation";
 import {
   Phone,
   Mail,
-  Lock,
   Eye,
   EyeOff,
   ArrowRight,
+  ExternalLink,
   ShieldCheck,
   CheckCircle2,
   Sparkles,
   Building2,
-  User,
   Star,
   RefreshCw,
 } from "lucide-react";
@@ -29,7 +28,17 @@ import { api } from "@/lib/api";
 
 type AuthMode = "signin" | "signup";
 type LoginMethod = "phone" | "email";
-type UserRole = "organizer" | "partner";
+
+const VENDOR_HUB_URL = process.env.NEXT_PUBLIC_VENDOR_HUB_URL || "http://localhost:3001";
+
+const getSafeRedirectTarget = (): string => {
+  if (typeof window === "undefined") return "/venues";
+  const param = new URLSearchParams(window.location.search).get("redirect");
+  if (param && param.startsWith("/") && !param.startsWith("//")) {
+    return param;
+  }
+  return "/venues";
+};
 
 /**
  * Sign In page component with dual authentication methods and responsive split-screen layout.
@@ -42,7 +51,6 @@ export default function SignInPage() {
   // Mode and tab states
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("phone");
-  const [userRole, setUserRole] = useState<UserRole>("organizer");
 
   // Phone OTP Flow States
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -50,11 +58,12 @@ export default function SignInPage() {
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [countdown, setCountdown] = useState(30);
 
-  // Email / Password Form States
+  // Email / Phone + Password Form States
+  const [passwordLoginBy, setPasswordLoginBy] = useState<"email" | "phone">("phone");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [companyName, setCompanyName] = useState("");
+  const [referralCodeInput, setReferralCodeInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -161,7 +170,7 @@ export default function SignInPage() {
         window.dispatchEvent(new Event("auth-change"));
       }
       setTimeout(() => {
-        window.location.href = userRole === "partner" ? "/list-your-venue" : "/venues";
+        window.location.href = getSafeRedirectTarget();
       }, 800);
     } catch (err: any) {
       setIsLoading(false);
@@ -178,7 +187,13 @@ export default function SignInPage() {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!email || !password) {
+    const cleanPhone = phoneNumber.replace(/\D/g, "");
+    if (authMode === "signin" && passwordLoginBy === "phone") {
+      if (cleanPhone.length < 10 || !password) {
+        setErrorMessage("Please enter a valid 10-digit mobile number and password.");
+        return;
+      }
+    } else if (!email || !password) {
       setErrorMessage("Please provide both email address and password.");
       return;
     }
@@ -196,12 +211,16 @@ export default function SignInPage() {
           name: fullName,
           email,
           password,
-          phone: phoneNumber.replace(/\D/g, "") || "9876543210",
-          role: userRole === "partner" ? "vendor" : "organizer",
-          companyName: companyName || undefined,
+          phone: cleanPhone || "9876543210",
+          role: "organizer",
+          referralCode: referralCodeInput.trim() || undefined,
         });
       } else {
-        res = await api.auth.login({ email, password });
+        res = await api.auth.login(
+          passwordLoginBy === "phone"
+            ? { phone: cleanPhone, password }
+            : { email, password }
+        );
       }
 
       setIsLoading(false);
@@ -213,7 +232,7 @@ export default function SignInPage() {
       }
 
       setTimeout(() => {
-        window.location.href = userRole === "partner" ? "/list-your-venue" : "/venues";
+        window.location.href = getSafeRedirectTarget();
       }, 800);
     } catch (err: any) {
       setIsLoading(false);
@@ -222,22 +241,15 @@ export default function SignInPage() {
   };
 
   /**
-   * Fills demo credentials for quick preview.
-   *
-   * @param role - Target demo role
+   * Fills demo customer host credentials for quick preview.
    */
-  const fillDemoCredentials = (role: UserRole) => {
-    setUserRole(role);
+  const fillDemoHostCredentials = () => {
     setLoginMethod("email");
+    setPasswordLoginBy("email");
     setAuthMode("signin");
     setErrorMessage("");
-    if (role === "organizer") {
-      setEmail("raghav.rao@gmail.com");
-      setPassword("Password@123");
-    } else {
-      setEmail("admin@eventspacing.com");
-      setPassword("Admin@123");
-    }
+    setEmail("raghav.rao@gmail.com");
+    setPassword("Password@123");
   };
 
   return (
@@ -323,55 +335,20 @@ export default function SignInPage() {
           </div>
 
           <div>
-            {/* Account Role Selector: Organizer vs Venue Partner */}
-            <div className="mb-6">
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                Signing In As
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#fbf9fc] p-1.5 rounded-2xl border border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setUserRole("organizer")}
-                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                    userRole === "organizer"
-                      ? "bg-[#380c48] text-white shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  <User className="w-3.5 h-3.5" />
-                  <span>Event Organizer / Host</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setUserRole("partner")}
-                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                    userRole === "partner"
-                      ? "bg-[#380c48] text-white shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  <span>Venue Owner / Vendor</span>
-                </button>
-              </div>
-            </div>
-
             {/* Header Title */}
             <div className="mb-6">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-100 text-[11px] font-bold uppercase tracking-wider text-[#380c48] mb-2">
+                Event Organizer / Host Sign In
+              </span>
               <h1 className="font-serif text-2xl sm:text-3xl font-bold text-brand-950 mb-1.5">
                 {authMode === "signin"
-                  ? userRole === "organizer"
-                    ? "Welcome Back, Organizer"
-                    : "Venue Partner Portal"
-                  : userRole === "organizer"
-                  ? "Create Your Host Account"
-                  : "Register as a Venue Partner"}
+                  ? "Welcome Back, Organizer"
+                  : "Create Your Host Account"}
               </h1>
               <p className="text-xs sm:text-sm text-gray-500">
                 {authMode === "signin"
-                  ? "Enter your credentials or verify via mobile OTP to continue."
-                  : "Join thousands of planners and venues across Bengaluru."}
+                  ? "Enter your credentials or verify via mobile OTP to manage your bookings."
+                  : "Join thousands of event hosts booking verified venues & services across Bengaluru."}
               </p>
             </div>
 
@@ -406,7 +383,7 @@ export default function SignInPage() {
                 }`}
               >
                 <Mail className="w-3.5 h-3.5" />
-                <span>Email &amp; Password</span>
+                <span>Password Login</span>
               </button>
             </div>
 
@@ -427,7 +404,7 @@ export default function SignInPage() {
                   Authentication Successful!
                 </h3>
                 <p className="text-xs text-emerald-800">
-                  Redirecting to your {userRole === "partner" ? "Partner Dashboard" : "Event Portal"}...
+                  Redirecting to your Event Portal...
                 </p>
               </div>
             ) : loginMethod === "phone" ? (
@@ -588,41 +565,99 @@ export default function SignInPage() {
                         className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48]"
                       />
                     </div>
-
-                    {userRole === "partner" && (
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">
-                          Venue or Business Name *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={companyName}
-                          onChange={(e) => setCompanyName(e.target.value)}
-                          placeholder="e.g. The Grand Palace Banquet Hall"
-                          className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48]"
-                        />
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Referral Code (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={referralCodeInput}
+                        onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                        placeholder="e.g. ESRAG4F12"
+                        className="w-full text-xs px-3.5 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48] font-mono uppercase"
+                      />
+                    </div>
                   </>
                 )}
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Email Address *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@company.com"
-                      className="w-full text-xs pl-3.5 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48]"
-                    />
-                    <Mail className="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                {authMode === "signin" && (
+                  <div className="flex items-center gap-2 bg-[#fbf9fc] p-1 rounded-xl border border-gray-200 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setPasswordLoginBy("phone")}
+                      className={`flex-1 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        passwordLoginBy === "phone"
+                          ? "bg-[#380c48] text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Phone + Password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPasswordLoginBy("email")}
+                      className={`flex-1 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        passwordLoginBy === "email"
+                          ? "bg-[#380c48] text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Email + Password
+                    </button>
                   </div>
-                </div>
+                )}
+
+                {authMode === "signin" && passwordLoginBy === "phone" ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-gray-700">
+                        Indian Mobile Number *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginMethod("phone");
+                          setOtpSent(false);
+                        }}
+                        className="text-[11px] font-bold text-[#380c48] hover:underline cursor-pointer"
+                      >
+                        Use OTP instead
+                      </button>
+                    </div>
+                    <div className="flex items-center rounded-xl border border-gray-200 focus-within:border-[#380c48] bg-white overflow-hidden">
+                      <div className="flex items-center gap-1 px-3 py-3 bg-gray-50 border-r border-gray-200 text-xs font-bold text-gray-700 select-none">
+                        <span>🇮🇳</span>
+                        <span>+91</span>
+                      </div>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
+                        placeholder="98765 43210"
+                        className="w-full text-xs px-3.5 py-3 focus:outline-none tracking-wider font-medium text-gray-900"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                      Email Address *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@company.com"
+                        className="w-full text-xs pl-3.5 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#380c48]"
+                      />
+                      <Mail className="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -703,7 +738,7 @@ export default function SignInPage() {
                 type="button"
                 onClick={() => {
                   setAuthSuccess(true);
-                  setTimeout(() => router.push("/venues"), 1200);
+                  setTimeout(() => router.push(getSafeRedirectTarget()), 1200);
                 }}
                 className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-xs font-bold text-gray-700 shadow-xs"
               >
@@ -733,7 +768,7 @@ export default function SignInPage() {
                 type="button"
                 onClick={() => {
                   setAuthSuccess(true);
-                  setTimeout(() => router.push("/venues"), 1200);
+                  setTimeout(() => router.push(getSafeRedirectTarget()), 1200);
                 }}
                 className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-xs font-bold text-gray-700 shadow-xs"
               >
@@ -744,24 +779,42 @@ export default function SignInPage() {
               </button>
             </div>
 
-            {/* Quick Demo Logins for Pair Reviewing */}
-            <div className="mt-6 pt-4 border-t border-dashed border-gray-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="text-gray-400 font-medium">Quick Demo Accounts:</span>
-              <div className="flex gap-2">
+            {/* Quick Demo Account & Partner Hub Handoff */}
+            <div className="mt-6 pt-4 border-t border-dashed border-gray-200 space-y-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-gray-400 font-medium">Quick Demo Account:</span>
                 <button
                   type="button"
-                  onClick={() => fillDemoCredentials("organizer")}
-                  className="px-2.5 py-1 rounded bg-purple-50 text-[#380c48] font-semibold text-[11px] hover:bg-purple-100 transition-colors"
+                  onClick={fillDemoHostCredentials}
+                  className="px-3 py-1.5 rounded-lg bg-purple-50 text-[#380c48] font-semibold text-[11px] hover:bg-purple-100 transition-colors cursor-pointer"
                 >
-                  Demo Host
+                  Fill Demo Host Credentials
                 </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoCredentials("partner")}
-                  className="px-2.5 py-1 rounded bg-amber-50 text-amber-900 font-semibold text-[11px] hover:bg-amber-100 transition-colors"
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#fbf9fc] border border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#380c48] text-gold-400 flex items-center justify-center shrink-0">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-brand-950 text-xs">
+                      Venue Owner or Marketplace Vendor?
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      Manage venues, services, calendar &amp; payouts in the dedicated Partner Hub.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={`${VENDOR_HUB_URL}/signin`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#e5a83b] hover:bg-[#d4992b] text-[#240b2e] font-bold text-[11px] shrink-0 transition-colors"
                 >
-                  Demo Partner
-                </button>
+                  <span>Go to Partner Hub</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
               </div>
             </div>
           </div>

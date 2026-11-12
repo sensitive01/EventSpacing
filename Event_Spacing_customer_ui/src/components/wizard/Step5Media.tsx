@@ -5,7 +5,7 @@
  * @description Step 5 form in the venue registration wizard managing photo uploads, cover photo selection, tagging, and media categories.
  */
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import Image from "next/image";
 import {
   ArrowLeft,
@@ -19,9 +19,12 @@ import {
   FileCheck,
   Camera,
   Star,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { useVenueWizard } from "@/context/VenueWizardContext";
 import { UploadedPhoto } from "@/types/wizard";
+import { formatFileSize, uploadImageFile } from "@/lib/upload";
 
 /**
  * Step 5: Photos & Media component matching Step 5 screenshot.
@@ -32,6 +35,11 @@ export const Step5Media: React.FC = () => {
   const { state, updateStep5, nextStep, prevStep } = useVenueWizard();
   const { step5 } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatusText, setUploadStatusText] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   /**
    * Sets a specific photo as the primary cover photo for the listing.
@@ -61,26 +69,82 @@ export const Step5Media: React.FC = () => {
   };
 
   /**
-   * Appends simulated sample photo uploads.
+   * Uploads selected or dropped venue photos directly to Cloudinary (eventspacing/venues).
    */
-  const handleAddSamplePhoto = () => {
-    if (step5.photos.length >= 20) {
-      alert("You can upload a maximum of 20 photos.");
+  const handleUploadFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+
+    const remainingSlots = 20 - step5.photos.length;
+    if (remainingSlots <= 0) {
+      setUploadError("You can upload a maximum of 20 photos.");
       return;
     }
-    const sampleUrls = [
-      "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
-      "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=600&q=80",
-      "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80",
-    ];
-    const newPhoto: UploadedPhoto = {
-      id: `ph-${Date.now()}`,
-      url: sampleUrls[Math.floor(Math.random() * sampleUrls.length)],
-      tag: "Additional Area",
-      isCover: false,
-      fileSize: "2.1 MB",
-    };
-    updateStep5({ photos: [...step5.photos, newPhoto] });
+
+    const batch = files.slice(0, remainingSlots);
+    if (files.length > remainingSlots) {
+      setUploadError(`Only ${remainingSlots} more photo(s) can be added (20 photo limit).`);
+    } else {
+      setUploadError(null);
+    }
+
+    setIsUploading(true);
+    let currentPhotos = [...step5.photos];
+
+    try {
+      for (let i = 0; i < batch.length; i++) {
+        const file = batch[i];
+        setUploadStatusText(`Uploading photo ${i + 1} of ${batch.length}...`);
+
+        const uploaded = await uploadImageFile(file, "venues");
+        const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+        const newPhoto: UploadedPhoto = {
+          id: `ph-${Date.now()}-${i}`,
+          url: uploaded.url,
+          tag: baseName ? baseName.slice(0, 32) : "Venue Gallery",
+          isCover: currentPhotos.length === 0,
+          fileSize: formatFileSize(file.size),
+        };
+
+        currentPhotos = [...currentPhotos, newPhoto];
+        updateStep5({ photos: currentPhotos });
+      }
+    } catch (err: any) {
+      setUploadError(err?.message || "Failed to upload one or more photos to Cloudinary.");
+    } finally {
+      setIsUploading(false);
+      setUploadStatusText("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      handleUploadFiles(e.target.files);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (!isUploading && e.dataTransfer.files?.length) {
+      handleUploadFiles(e.dataTransfer.files);
+    }
   };
 
   /**
@@ -168,36 +232,69 @@ export const Step5Media: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {uploadError && (
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{uploadError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="text-rose-500 hover:text-rose-800 font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Drag & Drop Upload Zone */}
         <div
-          onClick={() => fileInputRef.current?.click()}
-          className="rounded-3xl border-2 border-dashed border-brand-300 bg-brand-50/30 hover:bg-brand-50/60 p-8 text-center cursor-pointer transition-colors"
+          onClick={() => !isUploading && fileInputRef.current?.click()}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`rounded-3xl border-2 border-dashed p-8 text-center transition-colors ${
+            isUploading
+              ? "border-brand-400 bg-brand-50/70 cursor-wait"
+              : isDragging
+              ? "border-brand-700 bg-brand-100/60 cursor-copy"
+              : "border-brand-300 bg-brand-50/30 hover:bg-brand-50/60 cursor-pointer"
+          }`}
         >
           <input
             type="file"
             ref={fileInputRef}
             multiple
             accept="image/*"
+            disabled={isUploading}
             className="hidden"
-            onChange={handleAddSamplePhoto}
+            onChange={handleFileInputChange}
           />
           <div className="w-12 h-12 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center mx-auto mb-3 shadow-2xs">
-            <UploadCloud className="w-6 h-6" />
+            {isUploading ? (
+              <Loader2 className="w-6 h-6 animate-spin" />
+            ) : (
+              <UploadCloud className="w-6 h-6" />
+            )}
           </div>
           <h4 className="font-serif text-sm font-bold text-brand-950 mb-1">
-            Drag & drop photos here or click to upload
+            {isUploading
+              ? uploadStatusText || "Uploading to Cloudinary..."
+              : "Drag & drop photos here or click to upload"}
           </h4>
           <p className="text-xs text-gray-500 mb-4">
             Upload JPG, PNG or WEBP files (Max 10 MB each)
           </p>
           <button
             type="button"
-            className="px-5 py-2 rounded-xl bg-brand-800 hover:bg-brand-900 text-white font-semibold text-xs shadow-sm transition-all"
+            disabled={isUploading}
+            className="px-5 py-2 rounded-xl bg-brand-800 hover:bg-brand-900 text-white font-semibold text-xs shadow-sm transition-all disabled:opacity-50"
           >
-            Choose Files
+            {isUploading ? "Uploading..." : "Choose Files"}
           </button>
           <div className="text-[11px] text-gray-400 mt-3">
-            Recommended size: 1920 x 1080 or higher | You can upload multiple images
+            Recommended size: 1920 x 1080 or higher | Saved securely in Cloudinary (`eventspacing/venues`)
           </div>
         </div>
 
@@ -271,14 +368,19 @@ export const Step5Media: React.FC = () => {
             {step5.photos.length < 20 && (
               <button
                 type="button"
-                onClick={handleAddSamplePhoto}
-                className="rounded-2xl border-2 border-dashed border-gray-300 hover:border-brand-700 hover:bg-brand-50/30 flex flex-col items-center justify-center p-4 text-center transition-all h-40"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-2xl border-2 border-dashed border-gray-300 hover:border-brand-700 hover:bg-brand-50/30 flex flex-col items-center justify-center p-4 text-center transition-all h-40 disabled:opacity-50"
               >
                 <div className="w-10 h-10 rounded-full bg-gray-100 text-brand-800 flex items-center justify-center mb-2">
-                  <Plus className="w-5 h-5" />
+                  {isUploading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Plus className="w-5 h-5" />
+                  )}
                 </div>
                 <span className="text-xs font-bold text-brand-900">
-                  Add More Photos
+                  {isUploading ? "Uploading..." : "Add More Photos"}
                 </span>
                 <span className="text-[10px] text-gray-400 mt-0.5">
                   Up to 20 images
@@ -301,7 +403,8 @@ export const Step5Media: React.FC = () => {
 
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-brand-800 hover:bg-brand-900 text-white font-semibold text-xs sm:text-sm shadow-md transition-all"
+            disabled={isUploading}
+            className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-brand-800 hover:bg-brand-900 text-white font-semibold text-xs sm:text-sm shadow-md transition-all disabled:opacity-50"
           >
             <span>Save & Continue</span>
             <ArrowRight className="w-4 h-4" />

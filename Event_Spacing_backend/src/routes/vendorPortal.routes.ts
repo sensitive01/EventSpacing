@@ -19,6 +19,7 @@ import {
   getVendorReviews,
   replyVendorReview,
   getVendorBookings,
+  createVendorBooking,
   updateVendorBookingStatus,
 } from "../controllers/vendorPortal.controller";
 import { optionalAuth, protect } from "../middleware/auth.middleware";
@@ -61,6 +62,7 @@ router.post("/reviews/:id/reply", optionalAuth, replyVendorReview);
 
 // Booking Management
 router.get("/bookings", optionalAuth, getVendorBookings);
+router.post("/bookings", optionalAuth, createVendorBooking);
 router.patch("/bookings/:id/status", optionalAuth, updateVendorBookingStatus);
 
 export default router;

@@ -22,6 +22,7 @@ import {
   Info,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { uploadImageFile } from "@/lib/upload";
 import QRCode from "qrcode";
 
 interface PaymentGatewayModalProps {
@@ -78,7 +79,9 @@ export function PaymentGatewayModal({
   // Customer proof & UTR input state
   const [customerUtr, setCustomerUtr] = useState("");
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
+  const [proofUploadedUrl, setProofUploadedUrl] = useState<string | null>(null);
   const [proofFileName, setProofFileName] = useState<string>("");
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Razorpay Sandbox simulator state
@@ -173,8 +176,8 @@ export function PaymentGatewayModal({
     setTimeout(() => setCopiedUpi(false), 2500);
   };
 
-  // Proof screenshot file upload handler
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Proof screenshot file upload handler (uploads directly to Cloudinary eventspacing/payment-proofs)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -188,18 +191,42 @@ export function PaymentGatewayModal({
       return;
     }
 
+    const tempObjectUrl = URL.createObjectURL(file);
+    if (proofPreviewUrl && proofPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(proofPreviewUrl);
+    }
+
     setProofFileName(file.name);
+    setProofPreviewUrl(tempObjectUrl);
+    setProofUploadedUrl(null);
+    setIsUploadingProof(true);
     setErrorMessage(null);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setProofPreviewUrl(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const uploaded = await uploadImageFile(file, "payment-proofs");
+      URL.revokeObjectURL(tempObjectUrl);
+      setProofPreviewUrl(uploaded.url);
+      setProofUploadedUrl(uploaded.url);
+    } catch (err: any) {
+      URL.revokeObjectURL(tempObjectUrl);
+      setProofPreviewUrl(null);
+      setProofUploadedUrl(null);
+      setProofFileName("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setErrorMessage(err?.message || "Failed to upload payment proof screenshot. Please try again.");
+    } finally {
+      setIsUploadingProof(false);
+    }
   };
 
   const handleRemoveProof = () => {
+    if (proofPreviewUrl && proofPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(proofPreviewUrl);
+    }
     setProofPreviewUrl(null);
+    setProofUploadedUrl(null);
     setProofFileName("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -427,13 +454,18 @@ export function PaymentGatewayModal({
       return;
     }
 
-    if (!proofPreviewUrl) {
+    if (isUploadingProof) {
+      setErrorMessage("Please wait for your payment screenshot upload to finish.");
+      return;
+    }
+
+    if (!proofUploadedUrl) {
       setErrorMessage("Please upload a payment confirmation screenshot as proof of transaction.");
       return;
     }
 
     setIsProcessing(true);
-    setProcessingStep("Uploading payment proof and recording reservation request...");
+    setProcessingStep("Recording reservation request with verified payment proof...");
     setTxnRef(cleanUtr);
 
     try {
@@ -443,7 +475,7 @@ export function PaymentGatewayModal({
         amountPaid: bookingDetails.advanceAmount,
         paymentGateway: "direct_upi",
         utrNumber: cleanUtr,
-        paymentProofUrl: proofPreviewUrl,
+        paymentProofUrl: proofUploadedUrl,
       });
 
       setIsProcessing(false);
@@ -456,7 +488,7 @@ export function PaymentGatewayModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="bg-[#1f0528] text-white p-5 sm:p-6 relative">
@@ -909,29 +941,42 @@ export function PaymentGatewayModal({
                               alt="Proof preview"
                               className="w-full h-full object-cover"
                             />
+                            {isUploadingProof && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <Loader2 className="w-4 h-4 text-white animate-spin" />
+                              </div>
+                            )}
                           </div>
                           <div className="min-w-0">
                             <span className="text-xs font-bold text-gray-800 block truncate">
                               {proofFileName || "payment_proof.png"}
                             </span>
-                            <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> Screenshot attached
-                            </span>
+                            {isUploadingProof ? (
+                              <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Uploading to Cloudinary...
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Uploaded &amp; attached
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             type="button"
+                            disabled={isUploadingProof}
                             onClick={() => fileInputRef.current?.click()}
-                            className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
                           >
                             Change
                           </button>
                           <button
                             type="button"
+                            disabled={isUploadingProof}
                             onClick={handleRemoveProof}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 cursor-pointer"
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
                             title="Remove image"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -961,7 +1006,7 @@ export function PaymentGatewayModal({
                 <button
                   type="button"
                   onClick={handleDirectUpiSubmit}
-                  disabled={isProcessing || !customerUtr.trim() || !proofPreviewUrl}
+                  disabled={isProcessing || isUploadingProof || !customerUtr.trim() || !proofUploadedUrl}
                   className="w-full bg-[#380c48] hover:bg-[#521369] text-white font-bold text-sm py-4 px-6 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Lock className="w-4 h-4 text-[#f3cf7a]" />

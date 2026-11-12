@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { User } from "../models/User";
-import { AuthenticatedRequest } from "../middleware/auth.middleware";
+import { AuthenticatedRequest, formatAccountBlockedMessage } from "../middleware/auth.middleware";
+import { applyReferralBetweenUsers, ensureUserReferralCode } from "./referral.controller";
 
 export const register = async (
   req: Request,
@@ -8,7 +9,7 @@ export const register = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { name, email, phone, password, role, companyName } = req.body;
+    const { name, email, phone, password, role, companyName, businessName, referralCode } = req.body;
 
     // Check if user exists with this email or phone
     if (email) {
@@ -39,8 +40,14 @@ export const register = async (
       phone,
       password,
       role: role || "organizer",
-      companyName,
+      companyName: companyName || businessName,
+      businessName: businessName || companyName,
     });
+
+    const userReferralCode = await ensureUserReferralCode(user);
+    if (referralCode && typeof referralCode === "string" && referralCode.trim()) {
+      await applyReferralBetweenUsers(user, referralCode);
+    }
 
     const token = user.generateAuthToken();
 
@@ -57,6 +64,8 @@ export const register = async (
           role: user.role,
           companyName: user.companyName,
           businessName: user.businessName || user.companyName,
+          referralCode: userReferralCode,
+          referralCredits: user.referralCredits || 0,
         },
       },
     });
@@ -82,8 +91,16 @@ export const login = async (
     }
 
     const query: any = {};
-    if (email) query.email = email.toLowerCase();
-    else if (phone) query.phone = phone;
+    if (email) {
+      query.email = email.toLowerCase().trim();
+    } else if (phone) {
+      const cleanDigits = String(phone).replace(/\D/g, "");
+      if (cleanDigits.length >= 10) {
+        query.phone = new RegExp(`${cleanDigits.slice(-10)}$`);
+      } else {
+        query.phone = phone;
+      }
+    }
 
     const user = await User.findOne(query).select("+password");
 
@@ -104,6 +121,15 @@ export const login = async (
       return;
     }
 
+    if (user.isBlocked) {
+      res.status(403).json({
+        success: false,
+        message: formatAccountBlockedMessage(user.blockedReason),
+      });
+      return;
+    }
+
+    const referralCode = await ensureUserReferralCode(user);
     const token = user.generateAuthToken();
 
     res.status(200).json({
@@ -119,6 +145,8 @@ export const login = async (
           role: user.role,
           companyName: user.companyName,
           businessName: user.businessName || user.companyName,
+          referralCode,
+          referralCredits: user.referralCredits || 0,
         },
       },
     });
@@ -140,6 +168,14 @@ export const sendOtp = async (
     const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     let user = await User.findOne({ phone });
+    if (user?.isBlocked) {
+      res.status(403).json({
+        success: false,
+        message: formatAccountBlockedMessage(user.blockedReason),
+      });
+      return;
+    }
+
     if (!user) {
       // Pre-create user shell if new
       user = new User({
@@ -177,6 +213,13 @@ export const verifyOtp = async (
     const { phone, otp, name, role, businessName } = req.body;
 
     let user = await User.findOne({ phone }).select("+otpCode +otpExpiresAt");
+    if (user?.isBlocked) {
+      res.status(403).json({
+        success: false,
+        message: formatAccountBlockedMessage(user.blockedReason),
+      });
+      return;
+    }
 
     // Allow master dev bypass codes (123456 or vendor demo 481920) in non-production environments
     if ((otp === "123456" || otp === "481920") && process.env.NODE_ENV !== "production") {
@@ -271,6 +314,8 @@ export const getMe = async (
         avatarUrl: req.user.avatarUrl,
         isPhoneVerified: req.user.isPhoneVerified,
         isEmailVerified: req.user.isEmailVerified,
+        referralCode: req.user.referralCode,
+        referralCredits: req.user.referralCredits || 0,
       },
     });
   } catch (error) {

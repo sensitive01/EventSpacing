@@ -23,8 +23,14 @@ export interface IUser extends Document {
   avatarUrl?: string;
   isPhoneVerified: boolean;
   isEmailVerified: boolean;
+  isBlocked: boolean;
+  blockedReason?: string;
+  blockedAt?: Date | null;
   otpCode?: string;
   otpExpiresAt?: Date;
+  referralCode?: string;
+  referredBy?: mongoose.Types.ObjectId | null;
+  referralCredits: number;
   comparePassword(candidatePassword: string): Promise<boolean>;
   generateAuthToken(): string;
   createdAt: Date;
@@ -98,6 +104,20 @@ const UserSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    blockedReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
     otpCode: {
       type: String,
       select: false,
@@ -105,6 +125,22 @@ const UserSchema = new Schema<IUser>(
     otpExpiresAt: {
       type: Date,
       select: false,
+    },
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      uppercase: true,
+      trim: true,
+    },
+    referredBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    referralCredits: {
+      type: Number,
+      default: 0,
     },
   },
   {

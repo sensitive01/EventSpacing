@@ -8,8 +8,13 @@ export interface ICancellationPolicy {
 
 export interface IBooking extends Document {
   bookingRef: string;
+  bookingType: "venue" | "service";
+  bookingSource?: "online" | "walk_in";
+  cartGroupId?: string;
   userId?: mongoose.Types.ObjectId;
-  venueId: mongoose.Types.ObjectId;
+  venueId?: mongoose.Types.ObjectId;
+  vendorServiceId?: mongoose.Types.ObjectId;
+  serviceCategory?: string;
   venueName: string;
   venueCoverImage: string;
   locality: string;
@@ -64,6 +69,23 @@ const BookingSchema = new Schema<IBooking>(
       unique: true,
       trim: true,
     },
+    bookingType: {
+      type: String,
+      enum: ["venue", "service"],
+      default: "venue",
+      index: true,
+    },
+    bookingSource: {
+      type: String,
+      enum: ["online", "walk_in"],
+      default: "online",
+      index: true,
+    },
+    cartGroupId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -72,9 +94,16 @@ const BookingSchema = new Schema<IBooking>(
     venueId: {
       type: Schema.Types.ObjectId,
       ref: "Venue",
-      required: true,
+      required: false,
       index: true,
     },
+    vendorServiceId: {
+      type: Schema.Types.ObjectId,
+      ref: "Vendor",
+      required: false,
+      index: true,
+    },
+    serviceCategory: { type: String },
     venueName: { type: String, required: true },
     venueCoverImage: { type: String, required: true },
     locality: { type: String, required: true },

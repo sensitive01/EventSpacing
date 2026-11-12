@@ -244,7 +244,10 @@ export interface VenueFilterState {
 export interface CustomerBooking {
   id: string;
   bookingRef: string;
-  venueId: string;
+  bookingType?: "venue" | "service";
+  venueId?: string;
+  vendorServiceId?: string;
+  serviceCategory?: string;
   venueName: string;
   venueCoverImage: string;
   locality: string;

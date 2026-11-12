@@ -110,6 +110,7 @@ export const api = {
       phone?: string;
       role?: string;
       companyName?: string;
+      referralCode?: string;
     }): Promise<any> => httpClient.post("/auth/register", { ...data, role: "vendor" }),
 
     sendOtp: (phone: string): Promise<any> =>
@@ -246,6 +247,15 @@ export const api = {
 
     updateBookingStatus: (id: string, status: string): Promise<any> =>
       httpClient.patch(`/vendor-portal/bookings/${id}/status`, { status }),
+
+    createBooking: (data: any): Promise<any> =>
+      httpClient.post("/vendor-portal/bookings", data),
+  },
+
+  referrals: {
+    getMe: (): Promise<any> => httpClient.get("/referrals/me"),
+    applyCode: (referralCode: string): Promise<any> =>
+      httpClient.post("/referrals/apply", { referralCode }),
   },
 };
 

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { Vendor } from "../models/Vendor";
 import { Inquiry } from "../models/Inquiry";
+import { Booking } from "../models/Booking";
 
 export const getVendors = async (
   req: Request,
@@ -120,3 +122,38 @@ export const inquireVendor = async (
   }
 };
 
+
+/**
+ * GET /api/vendors/:id/booked-slots
+ * Returns confirmed/completed booked slots for a marketplace vendor service provider.
+ */
+export const getVendorBookedSlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(200).json({ success: true, count: 0, data: [] });
+      return;
+    }
+
+    const bookings = await Booking.find({
+      vendorServiceId: id,
+      status: { $in: ["confirmed", "completed"] },
+    }).select("eventDate timeSlot selectedSpaceName");
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      data: bookings.map((b) => ({
+        date: b.eventDate,
+        timeSlot: b.timeSlot,
+        spaceName: b.selectedSpaceName,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};

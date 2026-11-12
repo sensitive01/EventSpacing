@@ -11,5 +11,11 @@ export const config = {
     ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
     : ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
   nodeEnv: process.env.NODE_ENV || "development",
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+    apiKey: process.env.CLOUDINARY_API_KEY || "",
+    apiSecret: process.env.CLOUDINARY_API_SECRET || "",
+    baseFolder: process.env.CLOUDINARY_BASE_FOLDER || "eventspacing",
+  },
 };
 

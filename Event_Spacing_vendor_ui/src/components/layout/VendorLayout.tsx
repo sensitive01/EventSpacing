@@ -23,6 +23,7 @@ import {
   LogOut,
   Store,
   Star,
+  Gift,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -152,6 +153,7 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
     { name: "Availability Calendar", href: "/calendar", icon: CalendarDays },
     { name: "Customer Reviews", href: "/reviews", icon: Star },
     { name: "Payouts & Finance", href: "/payouts", icon: Wallet },
+    { name: "Refer & Earn", href: "/refer-and-earn", icon: Gift },
     { name: "Business Settings", href: "/settings", icon: Settings },
   ];
 

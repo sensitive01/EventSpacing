@@ -132,6 +132,7 @@ export const api = {
       password: string;
       role?: string;
       companyName?: string;
+      referralCode?: string;
     }): Promise<any> => httpClient.post("/auth/register", userData),
 
     sendOtp: (phone: string): Promise<any> =>
@@ -160,6 +161,9 @@ export const api = {
   bookings: {
     create: (bookingData: any): Promise<any> =>
       httpClient.post("/bookings", bookingData),
+
+    checkoutCart: (cartData: any): Promise<any> =>
+      httpClient.post("/bookings/checkout-cart", cartData),
 
     getMyBookings: (): Promise<any> =>
       httpClient.get("/bookings/my-bookings"),
@@ -219,6 +223,9 @@ export const api = {
     getById: (id: string): Promise<any> =>
       httpClient.get(`/vendors/${id}`),
 
+    getBookedSlots: (id: string): Promise<any> =>
+      httpClient.get(`/vendors/${id}/booked-slots`),
+
     inquire: (
       vendorId: string,
       data: {
@@ -235,6 +242,13 @@ export const api = {
   categories: {
     getAll: (): Promise<any> => httpClient.get("/categories"),
     getLocalities: (): Promise<any> => httpClient.get("/categories/localities"),
+  },
+
+  // Refer & Earn API
+  referrals: {
+    getMe: (): Promise<any> => httpClient.get("/referrals/me"),
+    applyCode: (referralCode: string): Promise<any> =>
+      httpClient.post("/referrals/apply", { referralCode }),
   },
 
   // Platform Settings API

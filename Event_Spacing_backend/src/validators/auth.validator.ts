@@ -8,6 +8,7 @@ export const registerSchema = z.object({
   role: z.enum(["organizer", "vendor", "admin"]).default("organizer"),
   companyName: z.string().optional(),
   businessName: z.string().optional(),
+  referralCode: z.string().optional(),
 });
 
 export const loginSchema = z.object({

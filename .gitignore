@@ -78,4 +78,8 @@ scratch/
 tmp/
 **/tmp/
 *.zip
-        
+
+# 9. Local Root Assets & Documentation
+/logo.png
+/logo.svg
+/FLUTTER_API_REFERENCE.md

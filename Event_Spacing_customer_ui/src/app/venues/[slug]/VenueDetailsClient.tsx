@@ -40,6 +40,7 @@ import { api } from "@/lib/api";
 import { StarRating } from "@/components/common/StarRating";
 import { Badge } from "@/components/common/Badge";
 import { PaymentGatewayModal } from "@/components/booking/PaymentGatewayModal";
+import { useBookingCart } from "@/context/CartContext";
 
 export default function VenueDetailsClient() {
   const params = useParams();
@@ -74,6 +75,9 @@ export default function VenueDetailsClient() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isBookingSubmitting, setIsBookingSubmitting] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [addedToCartToast, setAddedToCartToast] = useState(false);
+  const { addItem: addCartItem } = useBookingCart();
 
   // Inquiry Form State
   const [inquiryName, setInquiryName] = useState("");
@@ -87,26 +91,40 @@ export default function VenueDetailsClient() {
   const [inquirySuccess, setInquirySuccess] = useState(false);
   const [inquiryError, setInquiryError] = useState("");
 
-  // Auto-fill logged-in user details if available
+  // Sync signed-in status & auto-fill logged-in user details if available
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("es_user");
-      if (stored) {
-        const u = JSON.parse(stored);
-        if (u.name) {
-          setInquiryName(u.name);
-          setBookName(u.name);
+    const syncAuthAndProfile = () => {
+      try {
+        const token =
+          typeof window !== "undefined" ? localStorage.getItem("es_auth_token") : null;
+        setIsSignedIn(Boolean(token));
+
+        const stored = localStorage.getItem("es_user");
+        if (stored) {
+          const u = JSON.parse(stored);
+          if (u.name) {
+            setInquiryName(u.name);
+            setBookName(u.name);
+          }
+          if (u.email) {
+            setInquiryEmail(u.email);
+            setBookEmail(u.email);
+          }
+          if (u.phone) {
+            setInquiryPhone(u.phone);
+            setBookPhone(u.phone);
+          }
         }
-        if (u.email) {
-          setInquiryEmail(u.email);
-          setBookEmail(u.email);
-        }
-        if (u.phone) {
-          setInquiryPhone(u.phone);
-          setBookPhone(u.phone);
-        }
-      }
-    } catch {}
+      } catch {}
+    };
+
+    syncAuthAndProfile();
+    window.addEventListener("auth-change", syncAuthAndProfile);
+    window.addEventListener("storage", syncAuthAndProfile);
+    return () => {
+      window.removeEventListener("auth-change", syncAuthAndProfile);
+      window.removeEventListener("storage", syncAuthAndProfile);
+    };
   }, []);
 
   // Fetch venue from MongoDB Atlas by slug or ID with fallback to mock data
@@ -327,6 +345,11 @@ export default function VenueDetailsClient() {
     e.preventDefault();
     setBookingError("");
 
+    if (typeof window !== "undefined" && !localStorage.getItem("es_auth_token")) {
+      router.push(`/signin?redirect=${encodeURIComponent(`/venues/${slug}`)}`);
+      return;
+    }
+
     if (isCurrentSlotBooked) {
       setBookingError(`Slot Conflict: "${bookSpace || "Main Banquet Hall"}" is already reserved for ${bookTimeSlot} on ${bookDate}. Please pick another slot or date.`);
       return;
@@ -399,6 +422,11 @@ export default function VenueDetailsClient() {
       }
     } catch (err: any) {
       setIsBookingSubmitting(false);
+      if (err?.status === 401) {
+        setIsPaymentModalOpen(false);
+        router.push(`/signin?redirect=${encodeURIComponent(`/venues/${slug}`)}`);
+        return;
+      }
       const msg = err.message || "Failed to confirm reservation. Please select an available slot or contact concierge.";
       setBookingError(msg);
       setIsPaymentModalOpen(false);
@@ -1068,20 +1096,70 @@ export default function VenueDetailsClient() {
                       </div>
                     </div>
 
+                    {!isSignedIn ? (
+                      <Link
+                        href={`/signin?redirect=${encodeURIComponent(`/venues/${slug}`)}`}
+                        className="w-full bg-[#380c48] hover:bg-[#5a136b] text-white font-bold text-xs sm:text-sm py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                      >
+                        <Lock className="w-4 h-4 text-gold-300" />
+                        <span>Sign In to Pay Advance (₹{advanceAmountDue.toLocaleString()})</span>
+                      </Link>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={isBookingSubmitting || isCurrentSlotBooked}
+                        className="w-full bg-[#380c48] hover:bg-[#5a136b] text-white font-bold text-xs sm:text-sm py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Lock className="w-4 h-4 text-gold-300" />
+                        <span>
+                          {isCurrentSlotBooked
+                            ? "Slot Unavailable (Select Another Date)"
+                            : isBookingSubmitting
+                            ? "Locking Slot..."
+                            : `Pay Advance (₹${advanceAmountDue.toLocaleString()}) & Confirm`}
+                        </span>
+                      </button>
+                    )}
+
                     <button
-                      type="submit"
-                      disabled={isBookingSubmitting || isCurrentSlotBooked}
-                      className="w-full bg-[#380c48] hover:bg-[#5a136b] text-white font-bold text-xs sm:text-sm py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      type="button"
+                      disabled={isCurrentSlotBooked}
+                      onClick={() => {
+                        addCartItem({
+                          bookingType: "venue",
+                          venueId: venue._id || venue.id,
+                          title: venue.name,
+                          categoryLabel: venue.venueType || "Venue",
+                          coverImage: venue.coverImage || galleryImages[0],
+                          locality: venue.location?.locality || "Central",
+                          city: venue.location?.city || "Bengaluru",
+                          selectedSpaceName:
+                            bookSpace || venue.spaces?.[0]?.name || "Main Banquet Hall",
+                          packageTitle: effectivePackage?.title || "Standard Venue Rental",
+                          eventCategory: bookCategory,
+                          eventDate: bookDate,
+                          timeSlot: bookTimeSlot,
+                          guestCount: guestCountNum,
+                          totalAmount: bookingTotalAmount,
+                          advancePaid: advanceAmountDue,
+                          securityDeposit: refundableDeposit,
+                        });
+                        setAddedToCartToast(true);
+                        setTimeout(() => setAddedToCartToast(false), 5000);
+                      }}
+                      className="w-full bg-[#faf7fb] hover:bg-purple-50 border border-[#380c48]/25 text-[#380c48] font-bold text-xs py-2.5 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                     >
-                      <Lock className="w-4 h-4 text-gold-300" />
-                      <span>
-                        {isCurrentSlotBooked
-                          ? "Slot Unavailable (Select Another Date)"
-                          : isBookingSubmitting
-                          ? "Locking Slot..."
-                          : `Pay Advance (₹${advanceAmountDue.toLocaleString()}) & Confirm`}
-                      </span>
+                      + Add Venue to Booking Preview Cart
                     </button>
+
+                    {addedToCartToast && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 flex items-center justify-between gap-2">
+                        <span>Added to Booking Cart!</span>
+                        <Link href="/cart" className="font-bold underline text-[#380c48]">
+                          Preview Cart →
+                        </Link>
+                      </div>
+                    )}
                   </form>
                 </div>
               )}

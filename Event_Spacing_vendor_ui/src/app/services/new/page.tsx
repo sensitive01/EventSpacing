@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,8 +19,11 @@ import {
   Image as ImageIcon,
   HelpCircle,
   ChevronDown,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { uploadImageFile } from "@/lib/upload";
 import { VENDOR_MARKETPLACE_CATEGORIES, SERVICE_PRICE_UNITS } from "@/types/service";
 
 // Preset curated Unsplash photos for quick demo selection per category
@@ -62,6 +65,8 @@ export default function NewServiceListingPage() {
   const [priceUnit, setPriceUnit] = useState<string>("per day");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState(CATEGORY_IMAGE_PRESETS["Photographers"]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const serviceFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -85,6 +90,25 @@ export default function NewServiceListingPage() {
     setCategory(selected);
     if (CATEGORY_IMAGE_PRESETS[selected]) {
       setImageUrl(CATEGORY_IMAGE_PRESETS[selected]);
+    }
+  };
+
+  const handleServiceImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setErrorMsg(null);
+    setIsUploadingImage(true);
+    try {
+      const uploaded = await uploadImageFile(file, "services");
+      setImageUrl(uploaded.url);
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to upload cover photo.");
+    } finally {
+      setIsUploadingImage(false);
+      if (serviceFileInputRef.current) {
+        serviceFileInputRef.current.value = "";
+      }
     }
   };
 
@@ -357,14 +381,39 @@ export default function NewServiceListingPage() {
             <label className="block text-xs font-bold text-gray-700 mb-1.5">
               Cover Image / Portfolio URL
             </label>
-            <div className="flex gap-2">
+            <input
+              ref={serviceFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleServiceImageUpload}
+              className="hidden"
+            />
+            <div className="flex flex-wrap sm:flex-nowrap gap-2">
               <input
                 type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                className="flex-1 text-xs p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-800"
+                placeholder="https://res.cloudinary.com/..."
+                className="flex-1 min-w-[200px] text-xs p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-800"
               />
+              <button
+                type="button"
+                disabled={isUploadingImage}
+                onClick={() => serviceFileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-brand-800 hover:bg-brand-900 rounded-xl whitespace-nowrap transition-colors disabled:opacity-50"
+              >
+                {isUploadingImage ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Photo</span>
+                  </>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -374,9 +423,21 @@ export default function NewServiceListingPage() {
                 }}
                 className="px-3 py-2 text-xs font-semibold text-brand-900 bg-brand-50 hover:bg-brand-100 rounded-xl whitespace-nowrap transition-colors"
               >
-                Reset Default Photo
+                Reset Default
               </button>
             </div>
+            {imageUrl && (
+              <div className="mt-2.5 flex items-center gap-3">
+                <img
+                  src={imageUrl}
+                  alt="Service cover preview"
+                  className="w-16 h-12 rounded-xl object-cover border border-gray-200 bg-gray-100"
+                />
+                <span className="text-[11px] text-gray-500">
+                  Uploaded directly to Cloudinary (`eventspacing/services`) or custom HTTPS URL.
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -391,7 +452,7 @@ export default function NewServiceListingPage() {
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploadingImage}
             className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-brand-900 hover:bg-brand-950 text-white font-bold text-xs shadow-md transition-all disabled:opacity-50"
           >
             {isSubmitting ? (
