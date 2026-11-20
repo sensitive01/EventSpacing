@@ -50,6 +50,11 @@ const QUICK_BLOCK_REASONS = [
 ];
 
 const ROLE_STYLES: Record<AdminUserRole, { label: string; badge: string; avatar: string }> = {
+  customer: {
+    label: "Customer",
+    badge: "bg-blue-500/20 text-blue-300 border border-blue-500/30",
+    avatar: "from-blue-500/30 to-indigo-600/30 text-blue-200 border-blue-500/40",
+  },
   organizer: {
     label: "Customer",
     badge: "bg-blue-500/20 text-blue-300 border border-blue-500/30",
@@ -123,7 +128,7 @@ export default function AdminUsersPage() {
     name: "",
     email: "",
     phone: "",
-    role: "organizer" as AdminUserRole,
+    role: "customer" as AdminUserRole,
     companyName: "",
     businessName: "",
     gstNumber: "",
@@ -149,13 +154,17 @@ export default function AdminUsersPage() {
     setTimeout(() => setBanner(null), 5000);
   };
 
-  const recomputeSummary = (list: AdminUserItem[]): AdminUsersSummary => ({
-    totalUsers: list.length,
-    organizersCount: list.filter((u) => u.role === "organizer").length,
-    vendorsCount: list.filter((u) => u.role === "vendor").length,
-    adminsCount: list.filter((u) => u.role === "admin").length,
-    blockedCount: list.filter((u) => u.isBlocked).length,
-  });
+  const recomputeSummary = (list: AdminUserItem[]): AdminUsersSummary => {
+    const custCount = list.filter((u) => u.role === "customer" || u.role === "organizer").length;
+    return {
+      totalUsers: list.length,
+      customersCount: custCount,
+      organizersCount: custCount,
+      vendorsCount: list.filter((u) => u.role === "vendor").length,
+      adminsCount: list.filter((u) => u.role === "admin").length,
+      blockedCount: list.filter((u) => u.isBlocked).length,
+    };
+  };
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -190,7 +199,13 @@ export default function AdminUsersPage() {
     const q = searchQuery.trim().toLowerCase();
 
     const filtered = users.filter((u) => {
-      if (roleFilter !== "all" && u.role !== roleFilter) return false;
+      if (roleFilter !== "all") {
+        if (roleFilter === "customer" || roleFilter === "organizer") {
+          if (u.role !== "customer" && u.role !== "organizer") return false;
+        } else if (u.role !== roleFilter) {
+          return false;
+        }
+      }
       if (statusFilter === "active" && u.isBlocked) return false;
       if (statusFilter === "blocked" && !u.isBlocked) return false;
       if (statusFilter === "unverified" && (u.isPhoneVerified || u.isEmailVerified)) return false;
@@ -369,7 +384,7 @@ export default function AdminUsersPage() {
       name: user.name || "",
       email: user.email || "",
       phone: user.phone || "",
-      role: user.role || "organizer",
+      role: (user.role === "organizer" ? "customer" : (user.role || "customer")),
       companyName: user.companyName || "",
       businessName: user.businessName || "",
       gstNumber: user.gstNumber || "",
@@ -644,7 +659,7 @@ export default function AdminUsersPage() {
         <button
           type="button"
           onClick={() => {
-            setRoleFilter("organizer");
+            setRoleFilter("customer");
             setStatusFilter("all");
           }}
           className="text-left p-5 rounded-2xl bg-[#14061d] border border-brand-900/60 hover:border-blue-500/40 transition-colors cursor-pointer"
@@ -655,7 +670,7 @@ export default function AdminUsersPage() {
             </span>
             <UserCheck className="w-4 h-4 text-blue-400" />
           </div>
-          <div className="text-2xl font-bold text-white mt-2">{summary.organizersCount}</div>
+          <div className="text-2xl font-bold text-white mt-2">{summary.customersCount || summary.organizersCount}</div>
           <p className="text-[11px] text-gray-400 mt-1">Event organizers &amp; guests</p>
         </button>
 
@@ -704,7 +719,7 @@ export default function AdminUsersPage() {
             {(
               [
                 { key: "all", label: `All (${summary.totalUsers})` },
-                { key: "organizer", label: `Customers (${summary.organizersCount})` },
+                { key: "customer", label: `Customers (${summary.customersCount || summary.organizersCount})` },
                 { key: "vendor", label: `Vendors (${summary.vendorsCount})` },
                 { key: "admin", label: `Admins (${summary.adminsCount})` },
               ] as { key: RoleFilter; label: string }[]
@@ -1407,7 +1422,7 @@ export default function AdminUsersPage() {
                     }
                     className="w-full px-3 py-2 rounded-xl bg-brand-950 border border-brand-800 text-white focus:outline-none focus:border-gold-500"
                   >
-                    <option value="organizer">Customer (Organizer)</option>
+                    <option value="customer">Customer</option>
                     <option value="vendor">Vendor Partner</option>
                     <option value="admin">Admin</option>
                   </select>

@@ -59,6 +59,14 @@ export const api = {
     deleteUser: (id: string) =>
       request(`/admin/users/${id}`, { method: "DELETE" }),
     getVendors: () => request<any[]>("/admin/vendors"),
+    getVendorApprovals: () => request<any[]>("/admin/vendors/approvals"),
+    approveVendorPartner: (userId: string) =>
+      request<any>(`/admin/vendors/partner/${userId}/approve`, { method: "PUT" }),
+    rejectVendorPartner: (userId: string, data?: { reason?: string }) =>
+      request<any>(`/admin/vendors/partner/${userId}/reject`, {
+        method: "PUT",
+        body: JSON.stringify(data || {}),
+      }),
     updateVendorPartner: (userId: string, data: Record<string, any>) =>
       request<any>(`/admin/vendors/partner/${userId}`, {
         method: "PUT",

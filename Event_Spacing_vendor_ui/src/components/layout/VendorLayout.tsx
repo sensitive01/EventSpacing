@@ -19,6 +19,10 @@ import {
   X,
   Sparkles,
   ShieldCheck,
+  ShieldAlert,
+  Clock,
+  AlertTriangle,
+  XCircle,
   CheckCircle2,
   LogOut,
   Store,
@@ -62,12 +66,13 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
 
     syncVendor();
 
-    // Fetch user's venues & stats for sidebar workspace and badge
+    // Fetch user's venues, stats & latest KYC status for sidebar workspace and badge
     const loadSidebarData = async () => {
       try {
-        const [venuesRes, statsRes] = await Promise.allSettled([
+        const [venuesRes, statsRes, profileRes] = await Promise.allSettled([
           api.vendor.getVenues(),
           api.vendor.getStats(),
+          api.vendor.getProfile(),
         ]);
 
         if (isMounted) {
@@ -87,6 +92,24 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
           if (statsRes.status === "fulfilled" && statsRes.value?.data) {
             setNewLeadsCount(statsRes.value.data.newLeads || 0);
             setConfirmedBookingsCount(statsRes.value.data.confirmedBookings || 0);
+          }
+
+          if (profileRes.status === "fulfilled" && profileRes.value?.data) {
+            const profile = profileRes.value.data;
+            setVendorUser((prev: any) => {
+              const updated = {
+                ...(prev || {}),
+                kycStatus: profile.kycStatus,
+                isVerified: profile.isVerified,
+                blockedReason: profile.blockedReason,
+                name: profile.ownerName || prev?.name,
+                businessName: profile.businessName || prev?.businessName,
+              };
+              try {
+                localStorage.setItem("es_vendor_user", JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
           }
         }
       } catch (err) {
@@ -119,6 +142,10 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
     vendorUser?.businessName ||
     vendorUser?.companyName ||
     (userVenues.length > 0 ? userVenues[0].name : "Event Partner");
+
+  const isPartnerVerified = vendorUser?.kycStatus === "verified" || vendorUser?.isVerified === true;
+  const isPartnerRejected = vendorUser?.kycStatus === "rejected";
+  const isPartnerPending = !isPartnerVerified && !isPartnerRejected;
 
   const initials = displayName
     .split(" ")
@@ -292,14 +319,32 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
                 <span className="text-xs font-semibold text-white truncate">
                   {displayName}
                 </span>
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                {isPartnerVerified ? (
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                ) : isPartnerRejected ? (
+                  <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                ) : (
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                )}
               </div>
               <p className="text-[11px] text-gray-400 truncate">{displayBusiness}</p>
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-brand-900/80 flex items-center justify-between text-[11px] text-gray-400">
             <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Verified Vendor
+              {isPartnerVerified ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Verified Vendor
+                </>
+              ) : isPartnerRejected ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-rose-400"></span> Rejected
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-400"></span> Pending Approval
+                </>
+              )}
             </span>
             <button
               onClick={handleLogout}
@@ -444,6 +489,35 @@ export const VendorLayout: React.FC<VendorLayoutProps> = ({ children }) => {
                 </Link>
               );
             })}
+          </div>
+        )}
+
+        {/* Verification Warning Alert Banner for Pending or Rejected Partners */}
+        {isPartnerPending && (
+          <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 sm:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <span className="leading-snug">
+                <strong className="font-semibold text-amber-950">Account Under Review</strong>: Your vendor partner account has been created and is awaiting administrator approval. You can configure venue details and explore the portal, but public customer discovery and live booking slots will remain disabled until approved.
+              </span>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-900 font-bold text-[10px] uppercase tracking-wider shrink-0 self-start sm:self-auto border border-amber-500/30">
+              Pending Admin Approval
+            </span>
+          </div>
+        )}
+
+        {isPartnerRejected && (
+          <div className="bg-rose-500/10 border-b border-rose-500/30 px-4 sm:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-rose-900">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+              <span className="leading-snug">
+                <strong className="font-semibold text-rose-950">Application Rejected</strong>: {vendorUser?.blockedReason || "Your vendor partner application could not be verified by admin."} Please contact partner support at partner@eventspacing.com.
+              </span>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-900 font-bold text-[10px] uppercase tracking-wider shrink-0 self-start sm:self-auto border border-rose-500/30">
+              Application Rejected
+            </span>
           </div>
         )}
 

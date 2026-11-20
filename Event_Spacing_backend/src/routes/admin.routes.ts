@@ -13,6 +13,9 @@ import {
   toggleUserBlockStatus,
   deleteAdminUser,
   getAdminVendors,
+  getVendorApprovals,
+  approveVendorPartner,
+  rejectVendorPartner,
   updateAdminVendorPartner,
   updateAdminVendor,
   deleteAdminVendor,
@@ -35,6 +38,9 @@ router.put("/users/:id/block", toggleUserBlockStatus);
 router.delete("/users/:id", deleteAdminUser);
 
 router.get("/vendors", getAdminVendors);
+router.get("/vendors/approvals", getVendorApprovals);
+router.put("/vendors/partner/:userId/approve", approveVendorPartner);
+router.put("/vendors/partner/:userId/reject", rejectVendorPartner);
 router.put("/vendors/partner/:userId", updateAdminVendorPartner);
 router.put("/vendors/:id", updateAdminVendor);
 router.delete("/vendors/:id", deleteAdminVendor);

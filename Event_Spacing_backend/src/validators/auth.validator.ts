@@ -5,7 +5,7 @@ export const registerSchema = z.object({
   email: z.string().email("Invalid email address").optional(),
   phone: z.string().min(10, "Phone number must be at least 10 digits").optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["organizer", "vendor", "admin"]).default("organizer"),
+  role: z.enum(["customer", "vendor", "admin", "organizer"]).default("customer"),
   companyName: z.string().optional(),
   businessName: z.string().optional(),
   referralCode: z.string().optional(),
@@ -19,13 +19,14 @@ export const loginSchema = z.object({
 
 export const sendOtpSchema = z.object({
   phone: z.string().min(10, "Phone number must be at least 10 digits"),
+  role: z.enum(["customer", "vendor", "admin", "organizer"]).optional(),
 });
 
 export const verifyOtpSchema = z.object({
   phone: z.string().min(10, "Phone number must be at least 10 digits"),
   otp: z.string().length(6, "OTP must be exactly 6 digits"),
   name: z.string().optional(),
-  role: z.enum(["organizer", "vendor", "admin"]).optional(),
+  role: z.enum(["customer", "vendor", "admin", "organizer"]).optional(),
   businessName: z.string().optional(),
 });
 

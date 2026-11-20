@@ -30,6 +30,9 @@ export const getAdminMetrics = async (
     ]);
 
     const totalVendors = partnersList.length;
+    const pendingVendorsCount = partnersList.filter(
+      (p) => p.kycStatus === "pending" || !p.isVerified
+    ).length;
 
     const monthlyPlatformGMV = confirmedBookings.reduce(
       (sum, b) => sum + (b.totalAmount || 0),
@@ -51,6 +54,7 @@ export const getAdminMetrics = async (
         totalVenuesLive,
         venuesUnderReview,
         totalVendors,
+        pendingVendorsCount,
         totalCustomerInquiries: 0,
         monthlyPlatformGMV,
         monthlyCommissionEarned,
@@ -411,7 +415,8 @@ export const getAdminUsers = async (
 
     const summary = {
       totalUsers: enrichedUsers.length,
-      organizersCount: enrichedUsers.filter((u) => u.role === "organizer").length,
+      customersCount: enrichedUsers.filter((u) => u.role === "customer" || u.role === "organizer").length,
+      organizersCount: enrichedUsers.filter((u) => u.role === "customer" || u.role === "organizer").length,
       vendorsCount: enrichedUsers.filter((u) => u.role === "vendor").length,
       adminsCount: enrichedUsers.filter((u) => u.role === "admin").length,
       blockedCount: enrichedUsers.filter((u) => u.isBlocked).length,
@@ -573,8 +578,8 @@ export const updateAdminUser = async (
       }
     }
 
-    if (role !== undefined && ["organizer", "vendor", "admin"].includes(role)) {
-      user.role = role;
+    if (role !== undefined && ["customer", "vendor", "admin", "organizer"].includes(role)) {
+      user.role = role === "organizer" ? "customer" : role;
     }
     if (companyName !== undefined) user.companyName = String(companyName).trim();
     if (businessName !== undefined) user.businessName = String(businessName).trim();
@@ -1144,6 +1149,142 @@ export const deleteAdminVendor = async (
     res.status(200).json({
       success: true,
       message: `Vendor "${vendor.businessName}" removed successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/admin/vendors/approvals
+ * Returns all vendor partners pending KYC and onboarding compliance review
+ */
+export const getVendorApprovals = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const allPartners = await buildUnifiedVendorPartners();
+    const pendingPartners = allPartners.filter(
+      (p) => p.kycStatus === "pending" || !p.isVerified
+    );
+
+    res.status(200).json({
+      success: true,
+      count: pendingPartners.length,
+      data: pendingPartners,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/admin/vendors/partner/:userId/approve
+ * Approves a vendor partner account, marks KYC verified, and activates their venues & services.
+ */
+export const approveVendorPartner = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = String(req.params.userId);
+    if (!isValidObjectId(userId)) {
+      res.status(400).json({ success: false, message: "Invalid partner user ID format." });
+      return;
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: "Vendor partner account not found." });
+      return;
+    }
+
+    user.kycStatus = "verified";
+    user.isBlocked = false;
+    user.blockedReason = "";
+    await user.save();
+
+    // Cascade approval to all owned venues and marketplace services
+    await Promise.all([
+      Venue.updateMany(
+        { vendorId: user._id },
+        { $set: { isVerified: true, status: "live" } }
+      ),
+      Vendor.updateMany(
+        { vendorId: user._id },
+        { $set: { isVerified: true } }
+      ),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: `Partner "${user.businessName || user.name}" approved successfully and published to live marketplace.`,
+      data: {
+        userId: user._id.toString(),
+        ownerName: user.name,
+        businessName: user.businessName || user.companyName || "",
+        kycStatus: "verified",
+        isVerified: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/admin/vendors/partner/:userId/reject
+ * Rejects a vendor partner application with optional reviewer notes.
+ */
+export const rejectVendorPartner = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = String(req.params.userId);
+    if (!isValidObjectId(userId)) {
+      res.status(400).json({ success: false, message: "Invalid partner user ID format." });
+      return;
+    }
+
+    const { reason } = req.body;
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: "Vendor partner account not found." });
+      return;
+    }
+
+    user.kycStatus = "rejected";
+    user.blockedReason = (reason && String(reason).trim()) || "Application rejected by admin review.";
+    await user.save();
+
+    // Cascade rejection to owned venues and services
+    await Promise.all([
+      Venue.updateMany(
+        { vendorId: user._id },
+        { $set: { isVerified: false, status: "rejected" } }
+      ),
+      Vendor.updateMany(
+        { vendorId: user._id },
+        { $set: { isVerified: false } }
+      ),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: `Partner "${user.businessName || user.name}" application rejected.`,
+      data: {
+        userId: user._id.toString(),
+        ownerName: user.name,
+        businessName: user.businessName || user.companyName || "",
+        kycStatus: "rejected",
+        isVerified: false,
+        rejectionReason: user.blockedReason,
+      },
     });
   } catch (error) {
     next(error);

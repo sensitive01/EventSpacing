@@ -110,7 +110,7 @@ export interface UpiGatewayConfig {
   isEnabled: boolean;
 }
 
-export type AdminUserRole = "organizer" | "vendor" | "admin";
+export type AdminUserRole = "customer" | "vendor" | "admin" | "organizer";
 export type AdminUserKycStatus = "verified" | "pending" | "rejected";
 
 export interface AdminUserItem {
@@ -140,6 +140,7 @@ export interface AdminUserItem {
 
 export interface AdminUsersSummary {
   totalUsers: number;
+  customersCount?: number;
   organizersCount: number;
   vendorsCount: number;
   adminsCount: number;

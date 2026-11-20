@@ -808,6 +808,18 @@ export default function AdminVendorsPage() {
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
+                          {!partner.isVerified && (
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePartnerVerified(partner)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-sm"
+                              title="1-Click Approve Partner"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => setViewingPartnerId(partner.id)}

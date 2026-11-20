@@ -114,7 +114,7 @@ export const api = {
     }): Promise<any> => httpClient.post("/auth/register", { ...data, role: "vendor" }),
 
     sendOtp: (phone: string): Promise<any> =>
-      httpClient.post("/auth/send-otp", { phone }),
+      httpClient.post("/auth/send-otp", { phone, role: "vendor" }),
 
     verifyOtp: (phone: string, otp: string): Promise<any> =>
       httpClient.post("/auth/verify-otp", { phone, otp, role: "vendor" }),

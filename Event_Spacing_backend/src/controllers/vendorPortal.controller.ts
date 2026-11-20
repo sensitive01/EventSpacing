@@ -91,7 +91,9 @@ export const getVendorProfile = async (
           accountHolder: user?.bankDetails?.accountHolder || user?.businessName || user?.name || "",
           bankName: user?.bankDetails?.bankName || "",
         },
-        kycStatus: user?.kycStatus || (totalVenues > 0 ? "verified" : "pending"),
+        kycStatus: user?.kycStatus || "pending",
+        isVerified: user?.kycStatus === "verified",
+        blockedReason: user?.blockedReason || "",
         totalVenues,
         rating: totalVenues > 0 ? 4.85 : 0,
         joinedDate: user?.createdAt
@@ -128,6 +130,14 @@ export const updateVendorProfile = async (
       },
       { new: true, runValidators: true }
     ).select("-password -otpCode -otpExpiresAt");
+
+    if (updatedUser && updatedUser.role !== "vendor" && updatedUser.role !== "admin") {
+      updatedUser.role = "vendor";
+      if (updatedUser.kycStatus !== "verified") {
+        updatedUser.kycStatus = "pending";
+      }
+      await updatedUser.save();
+    }
 
     res.status(200).json({
       success: true,
@@ -498,9 +508,9 @@ export const createVendorVenue = async (
       shortDescription: shortDescription || "Newly registered premier celebration space.",
       detailedDescription: detailedDescription || shortDescription,
       badge: "New",
-      isVerified: true,
+      isVerified: user?.kycStatus === "verified",
       isActive: true,
-      status: "live",
+      status: user?.kycStatus === "verified" ? "live" : "under_review",
     });
 
     const token = user
@@ -1035,7 +1045,7 @@ export const createVendorService = async (
                 "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=800&q=80",
             ],
       description: description || `Professional ${category} services for weddings and special celebrations.`,
-      isVerified: true,
+      isVerified: user?.kycStatus === "verified",
       phone: phone || user?.phone || "+91 98765 43210",
       email: email || user?.email || "service@eventspacing.com",
     });

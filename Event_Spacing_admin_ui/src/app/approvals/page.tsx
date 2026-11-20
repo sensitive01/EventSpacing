@@ -29,10 +29,10 @@ import {
   CheckCheck,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { VenueApprovalItem, ApprovalStatus, DirectUpiPaymentApproval } from "@/types/admin";
+import { VenueApprovalItem, ApprovalStatus, DirectUpiPaymentApproval, AdminUnifiedPartnerItem } from "@/types/admin";
 import QRCode from "qrcode";
 
-type ActiveModuleTab = "venues" | "payments" | "upi_settings";
+type ActiveModuleTab = "venues" | "vendors" | "payments" | "upi_settings";
 
 const defaultUpiConfig = {
   upiId: "eventspacing@okhdfcbank",
@@ -61,6 +61,12 @@ export default function AdminApprovalsPage() {
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectModalBooking, setRejectModalBooking] = useState<DirectUpiPaymentApproval | null>(null);
+
+  // Vendor Partner Onboarding & KYC Queue state
+  const [vendorQueue, setVendorQueue] = useState<AdminUnifiedPartnerItem[]>([]);
+  const [isLoadingVendors, setIsLoadingVendors] = useState(false);
+  const [rejectModalVendor, setRejectModalVendor] = useState<AdminUnifiedPartnerItem | null>(null);
+  const [vendorRejectReason, setVendorRejectReason] = useState("");
 
   // UPI Gateway Configuration state
   const [upiConfig, setUpiConfig] = useState(defaultUpiConfig);
@@ -146,11 +152,66 @@ export default function AdminApprovalsPage() {
     }
   };
 
+  // Fetch vendor partner KYC approvals from backend API
+  const fetchVendorApprovals = async () => {
+    setIsLoadingVendors(true);
+    try {
+      const res = await api.admin.getVendorApprovals();
+      if (res?.success && Array.isArray(res.data)) {
+        setVendorQueue(res.data);
+      } else {
+        setVendorQueue([]);
+      }
+    } catch (err) {
+      console.warn("Could not fetch vendor approvals from backend.", err);
+      setVendorQueue([]);
+    } finally {
+      setIsLoadingVendors(false);
+    }
+  };
+
   useEffect(() => {
     fetchPendingUpiBookings();
     fetchVenueApprovals();
+    fetchVendorApprovals();
     fetchUpiConfig();
   }, []);
+
+  // Vendor KYC Approval Handlers
+  const handleApproveVendor = async (partner: AdminUnifiedPartnerItem) => {
+    const targetId = partner.userId || partner.id;
+    try {
+      const res = await api.admin.approveVendorPartner(targetId);
+      if (res?.success) {
+        setActionSuccess(`✓ Vendor Partner "${partner.businessName}" approved! Account verified and listings are now live.`);
+        setVendorQueue((prev) => prev.filter((p) => (p.userId || p.id) !== targetId));
+      } else {
+        alert(res?.message || "Failed to approve vendor.");
+      }
+    } catch (err: any) {
+      alert(err?.message || "Error approving vendor.");
+    }
+  };
+
+  const handleRejectVendor = async () => {
+    if (!rejectModalVendor) return;
+    const targetId = rejectModalVendor.userId || rejectModalVendor.id;
+    const reason = vendorRejectReason.trim() || "Application rejected by admin review.";
+    try {
+      const res = await api.admin.rejectVendorPartner(targetId, { reason });
+      if (res?.success) {
+        setActionSuccess(`Vendor Partner "${rejectModalVendor.businessName}" application rejected.`);
+        setVendorQueue((prev) => prev.filter((p) => (p.userId || p.id) !== targetId));
+      } else {
+        alert(res?.message || "Failed to reject vendor.");
+      }
+    } catch (err: any) {
+      alert(err?.message || "Error rejecting vendor.");
+    } finally {
+      setRejectModalVendor(null);
+      setVendorRejectReason("");
+    }
+  };
 
   // Save UPI Configuration
   const handleSaveUpiConfig = async (e: React.FormEvent) => {
@@ -285,6 +346,10 @@ export default function AdminApprovalsPage() {
 
   const pendingVenueCount = venueQueue.filter((v) => v.status === "pending").length;
 
+  const pendingVendorCount = vendorQueue.filter(
+    (v) => v.kycStatus === "pending" || !v.isVerified
+  ).length;
+
   return (
     <div className="space-y-6">
       {/* 1. Header with Top-Level Module Navigation Tabs */}
@@ -363,10 +428,27 @@ export default function AdminApprovalsPage() {
           }`}
         >
           <Building2 className="w-4 h-4 text-blue-400" />
-          <span>Venue KYC Verification Queue</span>
+          <span>Venue KYC Queue</span>
           {pendingVenueCount > 0 && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300">
               {pendingVenueCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveModuleTab("vendors")}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeModuleTab === "vendors"
+              ? "bg-[#380c48] text-white shadow-md ring-1 ring-gold-400/50"
+              : "bg-brand-950/60 text-gray-400 hover:text-white hover:bg-brand-900/40"
+          }`}
+        >
+          <Users className="w-4 h-4 text-amber-400" />
+          <span>Vendor Partner Approvals</span>
+          {pendingVendorCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400 text-[#1f0528]">
+              {pendingVendorCount} Pending
             </span>
           )}
         </button>
@@ -917,6 +999,201 @@ export default function AdminApprovalsPage() {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* MODULE 4: VENDOR PARTNER ONBOARDING & KYC APPROVALS QUEUE */}
+      {/* ========================================================================= */}
+      {activeModuleTab === "vendors" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="font-serif text-xl font-bold text-white flex items-center gap-2">
+                <span>Vendor Partner Onboarding &amp; KYC Queue</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-sans font-bold">
+                  {pendingVendorCount} Awaiting Review
+                </span>
+              </h2>
+              <p className="text-xs text-gray-400">
+                Audit newly registered vendor accounts. Approving a partner marks their KYC verified, clears pending restrictions, and instantly publishes their venues and services to the customer marketplace.
+              </p>
+            </div>
+
+            <button
+              onClick={fetchVendorApprovals}
+              disabled={isLoadingVendors}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-950 border border-brand-800 text-xs text-gray-300 hover:text-white hover:bg-brand-900 transition-colors cursor-pointer self-start sm:self-auto"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingVendors ? "animate-spin" : ""}`} />
+              <span>Refresh Queue</span>
+            </button>
+          </div>
+
+          {/* Metric cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-[#14061d] border border-brand-900/60 shadow-soft">
+              <span className="text-[11px] font-semibold text-gray-400 block uppercase tracking-wider">
+                Pending KYC Applications
+              </span>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-amber-400">{pendingVendorCount}</span>
+                <span className="text-[11px] text-gray-500">partners in queue</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#14061d] border border-brand-900/60 shadow-soft">
+              <span className="text-[11px] font-semibold text-gray-400 block uppercase tracking-wider">
+                Audit Compliance SLA
+              </span>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-emerald-400">100%</span>
+                <span className="text-[11px] text-gray-500">admin-moderated</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#14061d] border border-brand-900/60 shadow-soft">
+              <span className="text-[11px] font-semibold text-gray-400 block uppercase tracking-wider">
+                Total Partners Fetched
+              </span>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-white">{vendorQueue.length}</span>
+                <span className="text-[11px] text-gray-500">records</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Vendor Queue Content */}
+          {isLoadingVendors ? (
+            <div className="p-12 text-center text-gray-400 bg-[#14061d] rounded-3xl border border-brand-900/60">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-gold-400 mb-2" />
+              <p className="text-xs">Loading pending vendor applications...</p>
+            </div>
+          ) : vendorQueue.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 bg-[#14061d] rounded-3xl border border-brand-900/60 space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+              <h3 className="font-serif text-lg font-bold text-white">All Vendor Partners Verified!</h3>
+              <p className="text-xs text-gray-400 max-w-md mx-auto">
+                There are no pending vendor partner registrations awaiting compliance review at this time.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {vendorQueue.map((partner) => {
+                const initials = (partner.businessName || partner.ownerName || "VP")
+                  .split(" ")
+                  .map((w) => w[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase();
+
+                return (
+                  <div
+                    key={partner.id}
+                    className="bg-[#14061d] rounded-3xl border border-brand-900/60 shadow-soft overflow-hidden flex flex-col justify-between hover:border-gold-500/40 transition-all p-5 space-y-4"
+                  >
+                    <div>
+                      {/* Top Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-gold-500/20 to-brand-800/80 border border-gold-500/30 flex items-center justify-center text-gold-300 font-bold text-sm shrink-0">
+                            {initials}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-serif text-base font-bold text-white truncate">
+                              {partner.businessName}
+                            </h3>
+                            <p className="text-xs text-gray-400 truncate">
+                              Contact: {partner.ownerName}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                            partner.kycStatus === "rejected"
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          }`}
+                        >
+                          {partner.kycStatus === "rejected" ? "Rejected" : "Pending Review"}
+                        </span>
+                      </div>
+
+                      {/* Specs / Metadata */}
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2.5 rounded-xl bg-brand-950/80 border border-brand-900/60">
+                          <span className="text-[10px] text-gray-500 uppercase block font-semibold">Category</span>
+                          <span className="text-gray-200 font-medium truncate block">{partner.category}</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-brand-950/80 border border-brand-900/60">
+                          <span className="text-[10px] text-gray-500 uppercase block font-semibold">City</span>
+                          <span className="text-gray-200 font-medium truncate block">{partner.city}</span>
+                        </div>
+                      </div>
+
+                      {/* Contact details */}
+                      <div className="mt-3 space-y-1.5 text-xs text-gray-400">
+                        {partner.phone && (
+                          <div className="flex items-center gap-2 truncate">
+                            <Smartphone className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                            <span className="text-gray-300 font-mono text-[11px]">{partner.phone}</span>
+                          </div>
+                        )}
+                        {partner.email && (
+                          <div className="flex items-center gap-2 truncate">
+                            <FileText className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                            <span className="text-gray-300 text-[11px] truncate">{partner.email}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                          <Clock className="w-3.5 h-3.5 shrink-0" />
+                          <span>Submitted: {new Date(partner.createdAt).toLocaleDateString("en-IN")}</span>
+                        </div>
+                      </div>
+
+                      {/* Venues & Services Chips */}
+                      <div className="mt-3 pt-3 border-t border-brand-900/60 flex items-center justify-between text-xs">
+                        <span className="text-gray-400">Associated Listings:</span>
+                        <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                          <span className="px-2 py-0.5 rounded-md bg-brand-900 text-gray-200">
+                            {partner.venuesCount} Venues
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-brand-900 text-gray-200">
+                            {partner.servicesCount} Services
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="pt-2 border-t border-brand-900/60 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleApproveVendor(partner)}
+                        className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Approve Partner</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRejectModalVendor(partner);
+                          setVendorRejectReason("");
+                        }}
+                        className="py-2.5 px-3 rounded-xl bg-brand-950 hover:bg-rose-950/60 border border-brand-800 hover:border-rose-500/50 text-rose-300 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* LIGHTBOX MODAL: FULL PROOF SCREENSHOT VIEW */}
       {proofModalUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
@@ -996,6 +1273,55 @@ export default function AdminApprovalsPage() {
               <button
                 type="button"
                 onClick={handleRejectUpiPayment}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs cursor-pointer shadow-md"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* REJECT VENDOR MODAL */}
+      {rejectModalVendor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="relative max-w-md w-full bg-[#14061d] rounded-3xl p-6 border border-brand-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold text-white flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-rose-500" />
+                <span>Reject Vendor Application</span>
+              </h3>
+              <button
+                onClick={() => setRejectModalVendor(null)}
+                className="text-gray-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Please enter the compliance reason for rejecting the partner application for{" "}
+              <strong className="text-white">{rejectModalVendor.businessName}</strong>:
+            </p>
+
+            <textarea
+              rows={3}
+              value={vendorRejectReason}
+              onChange={(e) => setVendorRejectReason(e.target.value)}
+              placeholder="e.g. Incomplete GST credentials / Unverifiable business address / Invalid contact details..."
+              className="w-full p-3 rounded-xl bg-brand-950 border border-brand-800 text-xs text-white focus:outline-none focus:border-rose-500"
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setRejectModalVendor(null)}
+                className="px-4 py-2 rounded-xl border border-brand-800 text-xs text-gray-300 hover:bg-brand-900 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectVendor}
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs cursor-pointer shadow-md"
               >
                 Confirm Rejection

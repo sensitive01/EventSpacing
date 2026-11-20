@@ -8,7 +8,7 @@ export interface IUser extends Document {
   email?: string;
   phone?: string;
   password?: string;
-  role: "organizer" | "vendor" | "admin";
+  role: "customer" | "vendor" | "admin" | "organizer";
   companyName?: string;
   businessName?: string;
   gstNumber?: string;
@@ -62,8 +62,8 @@ const UserSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ["organizer", "vendor", "admin"],
-      default: "organizer",
+      enum: ["customer", "vendor", "admin", "organizer"],
+      default: "customer",
     },
     companyName: {
       type: String,
@@ -90,7 +90,9 @@ const UserSchema = new Schema<IUser>(
     kycStatus: {
       type: String,
       enum: ["verified", "pending", "rejected"],
-      default: "verified",
+      default: function (this: any) {
+        return this?.role === "vendor" ? "pending" : "verified";
+      },
     },
     avatarUrl: {
       type: String,

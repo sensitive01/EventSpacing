@@ -212,7 +212,7 @@ export default function SignInPage() {
           email,
           password,
           phone: cleanPhone || "9876543210",
-          role: "organizer",
+          role: "customer",
           referralCode: referralCodeInput.trim() || undefined,
         });
       } else {

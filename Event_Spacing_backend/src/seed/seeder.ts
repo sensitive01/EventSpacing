@@ -30,7 +30,7 @@ const seed = async () => {
       email: "raghav.rao@gmail.com",
       phone: "+91 98450 12345",
       password: "Password@123",
-      role: "organizer",
+      role: "customer",
       companyName: "Rao Enterprises",
       isPhoneVerified: true,
       isEmailVerified: true,

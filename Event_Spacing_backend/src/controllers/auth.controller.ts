@@ -34,14 +34,16 @@ export const register = async (
       }
     }
 
+    const assignedRole = role === "organizer" ? "customer" : (role || "customer");
     const user = await User.create({
       name,
       email: email ? email.toLowerCase() : undefined,
       phone,
       password,
-      role: role || "organizer",
+      role: assignedRole,
       companyName: companyName || businessName,
       businessName: businessName || companyName,
+      kycStatus: assignedRole === "vendor" ? "pending" : "verified",
     });
 
     const userReferralCode = await ensureUserReferralCode(user);
@@ -62,6 +64,7 @@ export const register = async (
           email: user.email,
           phone: user.phone,
           role: user.role,
+          kycStatus: user.kycStatus || (user.role === "vendor" ? "pending" : "verified"),
           companyName: user.companyName,
           businessName: user.businessName || user.companyName,
           referralCode: userReferralCode,
@@ -143,6 +146,7 @@ export const login = async (
           email: user.email,
           phone: user.phone,
           role: user.role,
+          kycStatus: user.kycStatus || (user.role === "vendor" ? "pending" : "verified"),
           companyName: user.companyName,
           businessName: user.businessName || user.companyName,
           referralCode,
@@ -161,7 +165,7 @@ export const sendOtp = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { phone } = req.body;
+    const { phone, role } = req.body;
 
     // Generate random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -178,9 +182,12 @@ export const sendOtp = async (
 
     if (!user) {
       // Pre-create user shell if new
+      const assignedRole = role === "organizer" ? "customer" : (role || "customer");
       user = new User({
         name: `Guest (${phone.slice(-4)})`,
         phone,
+        role: assignedRole,
+        kycStatus: assignedRole === "vendor" ? "pending" : "verified",
       });
     }
 
@@ -224,12 +231,14 @@ export const verifyOtp = async (
     // Allow master dev bypass codes (123456 or vendor demo 481920) in non-production environments
     if ((otp === "123456" || otp === "481920") && process.env.NODE_ENV !== "production") {
       if (!user) {
+        const assignedRole = role === "organizer" ? "customer" : (role || "customer");
         user = new User({
-          name: name || (role === "vendor" ? "Vikramaditya Rao" : `Guest (${phone.slice(-4)})`),
+          name: name || (assignedRole === "vendor" ? "Vikramaditya Rao" : `Guest (${phone.slice(-4)})`),
           phone,
-          role: role || "organizer",
-          businessName: businessName || (role === "vendor" ? "Prestige Hospitality & Banquets" : undefined),
+          role: assignedRole,
+          businessName: businessName || (assignedRole === "vendor" ? "Prestige Hospitality & Banquets" : undefined),
           isPhoneVerified: true,
+          kycStatus: assignedRole === "vendor" ? "pending" : "verified",
         });
       }
     } else {
@@ -265,6 +274,24 @@ export const verifyOtp = async (
     if (name && (!user.name || user.name.startsWith("Guest ("))) {
       user.name = name;
     }
+
+    const assignedRole = role === "organizer" ? "customer" : role;
+    if (assignedRole) {
+      if (user.role !== assignedRole) {
+        if (assignedRole === "vendor" || !user.role || user.name?.startsWith("Guest (")) {
+          user.role = assignedRole;
+          if (assignedRole === "vendor" && (!user.kycStatus || user.kycStatus === "verified")) {
+            user.kycStatus = "pending";
+          }
+        }
+      }
+    }
+
+    if (businessName) {
+      if (!user.businessName) user.businessName = businessName;
+      if (!user.companyName) user.companyName = businessName;
+    }
+
     await user.save();
 
     const token = user.generateAuthToken();
@@ -280,6 +307,7 @@ export const verifyOtp = async (
           email: user.email,
           phone: user.phone,
           role: user.role,
+          kycStatus: user.kycStatus || (user.role === "vendor" ? "pending" : "verified"),
           companyName: user.companyName,
           businessName: user.businessName || user.companyName,
         },
@@ -309,6 +337,7 @@ export const getMe = async (
         email: req.user.email,
         phone: req.user.phone,
         role: req.user.role,
+        kycStatus: req.user.kycStatus || (req.user.role === "vendor" ? "pending" : "verified"),
         companyName: req.user.companyName,
         businessName: req.user.businessName || req.user.companyName,
         avatarUrl: req.user.avatarUrl,

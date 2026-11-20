@@ -26,7 +26,10 @@ export const getVenues = async (
       limit = "12",
     } = req.query;
 
-    const filter: any = { isActive: true };
+    const filter: any = {
+      isActive: true,
+      status: { $nin: ["under_review", "rejected", "draft"] },
+    };
 
     // Text search query
     if (q && typeof q === "string" && q.trim()) {
@@ -171,13 +174,19 @@ export const getFeaturedVenues = async (
   try {
     let venues = await Venue.find({
       isActive: true,
+      status: { $nin: ["under_review", "rejected", "draft"] },
       badge: { $in: ["Popular", "Featured", "Free Venue Plan", "Premium", "New", "Live"] },
     })
       .sort({ rating: -1, createdAt: -1 })
       .limit(6);
 
     if (venues.length === 0) {
-      venues = await Venue.find({ isActive: true }).sort({ createdAt: -1 }).limit(6);
+      venues = await Venue.find({
+        isActive: true,
+        status: { $nin: ["under_review", "rejected", "draft"] },
+      })
+        .sort({ createdAt: -1 })
+        .limit(6);
     }
 
     res.status(200).json({

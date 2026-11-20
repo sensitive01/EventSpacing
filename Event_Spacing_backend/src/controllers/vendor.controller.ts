@@ -12,7 +12,7 @@ export const getVendors = async (
   try {
     const { category, locality, q, page = "1", limit = "12" } = req.query;
 
-    const filter: any = {};
+    const filter: any = { isVerified: { $ne: false } };
 
     if (category && category !== "All Categories") {
       filter.category = new RegExp(`^${category}$`, "i");
