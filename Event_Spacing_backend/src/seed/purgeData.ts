@@ -4,7 +4,7 @@ import { User } from "../models/User";
 import { Venue } from "../models/Venue";
 import { Booking } from "../models/Booking";
 import { Inquiry } from "../models/Inquiry";
-import { Vendor } from "../models/Vendor";
+import { MarketplaceService as Vendor } from "../models/MarketplaceService";
 
 export const purgeData = async () => {
   try {

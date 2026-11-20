@@ -99,7 +99,7 @@ const BookingSchema = new Schema<IBooking>(
     },
     vendorServiceId: {
       type: Schema.Types.ObjectId,
-      ref: "Vendor",
+      ref: "MarketplaceService",
       required: false,
       index: true,
     },

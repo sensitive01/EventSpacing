@@ -4,7 +4,10 @@ import jwt from "jsonwebtoken";
 import { config } from "../config/env";
 import { User, IUser } from "../models/User";
 import { Venue, IVenue } from "../models/Venue";
-import { Vendor, IVendor } from "../models/Vendor";
+import {
+  MarketplaceService as Vendor,
+  IMarketplaceService as IVendor,
+} from "../models/MarketplaceService";
 import { Inquiry } from "../models/Inquiry";
 import { Booking } from "../models/Booking";
 import { createBookingRecord, resolveAndValidateBookingItem } from "./booking.controller";

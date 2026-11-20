@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { Venue } from "../models/Venue";
 import { Booking } from "../models/Booking";
-import { Vendor } from "../models/Vendor";
+import { MarketplaceService as Vendor } from "../models/MarketplaceService";
 import { User } from "../models/User";
 
 /**

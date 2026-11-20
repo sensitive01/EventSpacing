@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
-import { Vendor } from "../models/Vendor";
+import { MarketplaceService as Vendor } from "../models/MarketplaceService";
 import { Inquiry } from "../models/Inquiry";
 import { Booking } from "../models/Booking";
 

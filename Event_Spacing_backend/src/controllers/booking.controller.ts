@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { Booking } from "../models/Booking";
 import { Venue } from "../models/Venue";
-import { Vendor } from "../models/Vendor";
+import { MarketplaceService as Vendor } from "../models/MarketplaceService";
 import { PlatformSettings } from "../models/Settings";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { venueCalendarOverrides } from "./vendorPortal.controller";

@@ -19,6 +19,8 @@ router.use("/venues", venueRoutes);
 router.use("/bookings", bookingRoutes);
 router.use("/inquiries", inquiryRoutes);
 router.use("/vendors", vendorRoutes);
+router.use("/services", vendorRoutes);
+router.use("/marketplace", vendorRoutes);
 router.use("/vendor-portal", vendorPortalRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/payments", paymentRoutes);
