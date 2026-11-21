@@ -11,6 +11,7 @@ import settingsRoutes from "./settings.routes";
 import adminRoutes from "./admin.routes";
 import uploadRoutes from "./upload.routes";
 import referralRoutes from "./referral.routes";
+import reviewRoutes from "./review.routes";
 
 const router = Router();
 
@@ -28,6 +29,7 @@ router.use("/settings", settingsRoutes);
 router.use("/admin", adminRoutes);
 router.use("/upload", uploadRoutes);
 router.use("/referrals", referralRoutes);
+router.use("/reviews", reviewRoutes);
 
 export default router;
 

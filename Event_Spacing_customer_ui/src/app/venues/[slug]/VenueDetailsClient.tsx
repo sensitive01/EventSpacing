@@ -41,6 +41,7 @@ import { StarRating } from "@/components/common/StarRating";
 import { Badge } from "@/components/common/Badge";
 import { PaymentGatewayModal } from "@/components/booking/PaymentGatewayModal";
 import { useBookingCart } from "@/context/CartContext";
+import { VenueReviewsSection } from "@/components/reviews/VenueReviewsSection";
 
 export default function VenueDetailsClient() {
   const params = useParams();
@@ -823,6 +824,12 @@ export default function VenueDetailsClient() {
                 </div>
               </div>
             </div>
+
+            {/* Guest Reviews & Ratings Section */}
+            <VenueReviewsSection
+              venueId={venue?._id || venue?.id}
+              venueName={venue?.name || "Event Venue"}
+            />
           </div>
 
           {/* Right Column: Sticky Booking & Direct Inquiry Sidebar (4 cols) */}

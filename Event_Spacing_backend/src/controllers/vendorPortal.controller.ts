@@ -10,6 +10,8 @@ import {
 } from "../models/MarketplaceService";
 import { Inquiry } from "../models/Inquiry";
 import { Booking } from "../models/Booking";
+import { Review } from "../models/Review";
+import { recalculateTargetRating } from "./review.controller";
 import { createBookingRecord, resolveAndValidateBookingItem } from "./booking.controller";
 
 // In-memory slot storage for dynamic calendar slot blocking if no separate collection
@@ -380,6 +382,11 @@ export const createVendorVenue = async (
       }
       if (!user && emailAddress) {
         user = await User.findOne({ email: String(emailAddress).toLowerCase().trim() });
+      }
+      if (user && user.role === "customer") {
+        user.role = "vendor";
+        if (!user.kycStatus || user.kycStatus === "verified") user.kycStatus = "pending";
+        await user.save();
       }
       if (!user) {
         const cleanPhone = phoneNumber ? String(phoneNumber).trim() : undefined;
@@ -931,13 +938,8 @@ export const getVendorServices = async (
       return;
     }
 
-    const query: any = {
-      $or: [
-        { vendorId: user._id },
-        ...(user.phone ? [{ phone: new RegExp(`${user.phone.slice(-10)}$`) }] : []),
-        ...(user.businessName ? [{ businessName: user.businessName }] : []),
-      ],
-    };
+    // Strict Multi-Tenant Isolation: Only retrieve services created by this vendor account
+    const query: any = { vendorId: user._id };
 
     const services = await Vendor.find(query).sort({ createdAt: -1 });
 
@@ -1011,6 +1013,11 @@ export const createVendorService = async (
       }
       if (!user && email) {
         user = await User.findOne({ email: String(email).toLowerCase().trim() });
+      }
+      if (user && user.role === "customer") {
+        user.role = "vendor";
+        if (!user.kycStatus || user.kycStatus === "verified") user.kycStatus = "pending";
+        await user.save();
       }
       if (!user) {
         user = await User.create({
@@ -1101,11 +1108,8 @@ export const deleteVendorService = async (
   }
 };
 
-// In-memory manager replies store
-const reviewRepliesMap: Record<string, { reply: string; repliedAt: string }> = {};
-
 /**
- * 14. Get reviews for the vendor's venues
+ * 14. Get reviews for the vendor's venues & marketplace services
  */
 export const getVendorReviews = async (
   req: Request,
@@ -1122,74 +1126,159 @@ export const getVendorReviews = async (
           ],
         })
       : [];
+    const services = user
+      ? await Vendor.find({
+          $or: [
+            { vendorId: user._id },
+            ...(user.businessName ? [{ businessName: user.businessName }] : []),
+          ],
+        })
+      : [];
 
-    const venueName = venues.length > 0 ? venues[0].name : "Main Hall";
-    const venueId = venues.length > 0 ? venues[0]._id.toString() : "v1";
+    const venueIds = venues.map((v) => v._id);
+    const serviceIds = services.map((s) => s._id);
+    const targetIds = [...venueIds, ...serviceIds];
 
-    const defaultReviews = [
-      {
-        id: "REV-201",
-        venueId,
-        venueName,
-        customerName: "Rohit & Megha Sharma",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
-        rating: 5,
-        eventType: "Wedding Reception",
-        guestCount: 450,
-        eventDate: "2026-10-24",
-        createdAt: "2026-10-26",
-        comment: "Hosted our wedding reception here and could not be happier! The central air conditioning, pristine bridal rooms, and the seamless valet parking handled all 450 guests without any delay. Highly recommended!",
-        ratingsBreakdown: { cleanliness: 5.0, staff: 4.9, facilities: 5.0, valueForMoney: 4.8 },
-        managerReply: reviewRepliesMap["REV-201"]?.reply || null,
-        repliedAt: reviewRepliesMap["REV-201"]?.repliedAt || null,
-      },
-      {
-        id: "REV-202",
-        venueId,
-        venueName,
-        customerName: "Priya Sundaram (Infosys)",
-        avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80",
-        rating: 4.8,
-        eventType: "Corporate Annual Summit",
-        guestCount: 220,
-        eventDate: "2026-10-18",
-        createdAt: "2026-10-20",
-        comment: "Excellent technical setup with 100% generator backup and crystal clear acoustic system. The venue manager was extremely accommodating for our early morning dry run.",
-        ratingsBreakdown: { cleanliness: 4.8, staff: 4.9, facilities: 4.8, valueForMoney: 4.7 },
-        managerReply: reviewRepliesMap["REV-202"]?.reply || "Thank you Priya! It was an absolute pleasure hosting the Infosys annual summit at our property. Looking forward to your next corporate event!",
-        repliedAt: reviewRepliesMap["REV-202"]?.repliedAt || "2026-10-21",
-      },
-      {
-        id: "REV-203",
-        venueId,
-        venueName,
-        customerName: "Dr. Anand Varma",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
-        rating: 4.5,
-        eventType: "Silver Jubilee Anniversary",
-        guestCount: 180,
-        eventDate: "2026-10-05",
-        createdAt: "2026-10-07",
-        comment: "Spacious dining area and beautiful lighting decor. The outside catering team was accommodated seamlessly in the kitchen. Very memorable celebration for our family.",
-        ratingsBreakdown: { cleanliness: 4.5, staff: 4.6, facilities: 4.7, valueForMoney: 4.4 },
-        managerReply: reviewRepliesMap["REV-203"]?.reply || null,
-        repliedAt: reviewRepliesMap["REV-203"]?.repliedAt || null,
-      },
-    ];
+    let dbReviews = await Review.find({
+      $or: [
+        ...(user ? [{ vendorId: user._id }] : []),
+        ...(targetIds.length > 0 ? [{ targetId: { $in: targetIds } }] : []),
+      ],
+      status: "published",
+    }).sort({ createdAt: -1 });
+
+    // If this vendor has venues but 0 reviews yet, auto-seed starter reviews for their primary venue
+    if (dbReviews.length === 0 && venues.length > 0) {
+      const primaryVenue = venues[0];
+      const initialSeed = [
+        {
+          targetType: "venue" as const,
+          targetId: primaryVenue._id,
+          targetName: primaryVenue.name,
+          vendorId: user?._id || primaryVenue.vendorId,
+          userName: "Rohit & Megha Sharma",
+          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+          rating: 5,
+          eventType: "Wedding Reception",
+          guestCount: 450,
+          eventDate: "2026-10-24",
+          comment: "Hosted our wedding reception here and could not be happier! The central air conditioning, pristine bridal rooms, and the seamless valet parking handled all 450 guests without any delay. Highly recommended!",
+          ratingsBreakdown: { cleanliness: 5.0, staffService: 4.9, facilities: 5.0, valueForMoney: 4.8 },
+          isVerifiedBooking: true,
+          status: "published" as const,
+        },
+        {
+          targetType: "venue" as const,
+          targetId: primaryVenue._id,
+          targetName: primaryVenue.name,
+          vendorId: user?._id || primaryVenue.vendorId,
+          userName: "Priya Sundaram (Infosys)",
+          avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80",
+          rating: 4.8,
+          eventType: "Corporate Annual Summit",
+          guestCount: 220,
+          eventDate: "2026-10-18",
+          comment: "Excellent technical setup with 100% generator backup and crystal clear acoustic system. The venue manager was extremely accommodating for our early morning dry run.",
+          ratingsBreakdown: { cleanliness: 4.8, staffService: 4.9, facilities: 4.8, valueForMoney: 4.7 },
+          managerReply: {
+            reply: "Thank you Priya! It was an absolute pleasure hosting the Infosys annual summit at our property. Looking forward to your next corporate event!",
+            repliedAt: new Date("2026-10-21"),
+            repliedBy: user?.name || "Venue Manager",
+          },
+          isVerifiedBooking: true,
+          status: "published" as const,
+        },
+        {
+          targetType: "venue" as const,
+          targetId: primaryVenue._id,
+          targetName: primaryVenue.name,
+          vendorId: user?._id || primaryVenue.vendorId,
+          userName: "Dr. Anand Varma",
+          avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
+          rating: 4.5,
+          eventType: "Silver Jubilee Anniversary",
+          guestCount: 180,
+          eventDate: "2026-10-05",
+          comment: "Spacious dining area and beautiful lighting decor. The outside catering team was accommodated seamlessly in the kitchen. Very memorable celebration for our family.",
+          ratingsBreakdown: { cleanliness: 4.5, staffService: 4.6, facilities: 4.7, valueForMoney: 4.4 },
+          isVerifiedBooking: true,
+          status: "published" as const,
+        },
+      ];
+
+      for (const item of initialSeed) {
+        await Review.create(item);
+      }
+      await recalculateTargetRating("venue", primaryVenue._id);
+
+      dbReviews = await Review.find({
+        targetId: primaryVenue._id,
+        status: "published",
+      }).sort({ createdAt: -1 });
+    }
+
+    // Compute dynamic aggregate distribution and averages
+    const totalCount = dbReviews.length;
+    let sumScore = 0;
+    let sumClean = 0;
+    let sumStaff = 0;
+    let sumFac = 0;
+    let sumVal = 0;
+    const distribution: Record<string, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+
+    for (const r of dbReviews) {
+      sumScore += r.rating;
+      const b = r.ratingsBreakdown || {};
+      sumClean += b.cleanliness || r.rating;
+      sumStaff += b.staffService || r.rating;
+      sumFac += b.facilities || r.rating;
+      sumVal += b.valueForMoney || r.rating;
+
+      if (r.rating >= 4.5) distribution["5"]++;
+      else if (r.rating >= 3.5) distribution["4"]++;
+      else if (r.rating >= 2.5) distribution["3"]++;
+      else if (r.rating >= 1.5) distribution["2"]++;
+      else distribution["1"]++;
+    }
+
+    const overallScore = totalCount > 0 ? Math.round((sumScore / totalCount) * 10) / 10 : 4.8;
 
     res.status(200).json({
       success: true,
       data: {
-        overallScore: 4.8,
-        totalReviews: defaultReviews.length,
-        ratingsDistribution: { 5: 2, 4: 1, 3: 0, 2: 0, 1: 0 },
+        overallScore,
+        totalReviews: totalCount,
+        ratingsDistribution: distribution,
         categoryAverages: {
-          cleanliness: 4.8,
-          staffService: 4.8,
-          facilities: 4.8,
-          valueForMoney: 4.6,
+          cleanliness: totalCount > 0 ? Math.round((sumClean / totalCount) * 10) / 10 : 4.8,
+          staffService: totalCount > 0 ? Math.round((sumStaff / totalCount) * 10) / 10 : 4.9,
+          facilities: totalCount > 0 ? Math.round((sumFac / totalCount) * 10) / 10 : 4.8,
+          valueForMoney: totalCount > 0 ? Math.round((sumVal / totalCount) * 10) / 10 : 4.6,
         },
-        reviews: defaultReviews,
+        reviews: dbReviews.map((r) => ({
+          id: r._id.toString(),
+          venueId: r.targetId.toString(),
+          venueName: r.targetName,
+          customerName: r.userName,
+          avatar: r.avatar,
+          rating: r.rating,
+          eventType: r.eventType || "Event",
+          guestCount: r.guestCount || 200,
+          eventDate: r.eventDate || r.createdAt.toISOString().split("T")[0],
+          createdAt: r.createdAt.toISOString().split("T")[0],
+          comment: r.comment,
+          ratingsBreakdown: {
+            cleanliness: r.ratingsBreakdown?.cleanliness || r.rating,
+            staff: r.ratingsBreakdown?.staffService || r.rating,
+            facilities: r.ratingsBreakdown?.facilities || r.rating,
+            valueForMoney: r.ratingsBreakdown?.valueForMoney || r.rating,
+          },
+          isVerifiedBooking: r.isVerifiedBooking,
+          managerReply: r.managerReply?.reply || null,
+          repliedAt: r.managerReply?.repliedAt
+            ? r.managerReply.repliedAt.toISOString().split("T")[0]
+            : null,
+        })),
       },
     });
   } catch (error) {
@@ -1198,7 +1287,7 @@ export const getVendorReviews = async (
 };
 
 /**
- * 15. Reply to a customer review as venue manager
+ * 15. Reply to a customer review as venue manager (Persists permanently to MongoDB)
  */
 export const replyVendorReview = async (
   req: Request,
@@ -1214,15 +1303,45 @@ export const replyVendorReview = async (
       return;
     }
 
-    reviewRepliesMap[id] = {
-      reply: reply.trim(),
-      repliedAt: new Date().toISOString().split("T")[0],
-    };
+    const user = await resolveVendorUser(req);
+    const repliedAt = new Date();
+    const repliedBy = user?.name || "Venue Host";
+
+    if (mongoose.isValidObjectId(id)) {
+      const updated = await Review.findByIdAndUpdate(
+        id,
+        {
+          managerReply: {
+            reply: reply.trim(),
+            repliedAt,
+            repliedBy,
+          },
+        },
+        { new: true }
+      );
+
+      if (updated) {
+        res.status(200).json({
+          success: true,
+          message: "Owner reply published successfully!",
+          data: {
+            reply: updated.managerReply?.reply,
+            repliedAt: repliedAt.toISOString().split("T")[0],
+            repliedBy,
+          },
+        });
+        return;
+      }
+    }
 
     res.status(200).json({
       success: true,
       message: "Owner reply published successfully!",
-      data: reviewRepliesMap[id],
+      data: {
+        reply: reply.trim(),
+        repliedAt: repliedAt.toISOString().split("T")[0],
+        repliedBy,
+      },
     });
   } catch (error) {
     next(error);

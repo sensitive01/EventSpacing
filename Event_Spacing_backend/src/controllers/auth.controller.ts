@@ -132,6 +132,17 @@ export const login = async (
       return;
     }
 
+    // Role-based portal access control: Prevent customer accounts from logging into Vendor Hub
+    if (req.body.role === "vendor") {
+      if (user.role === "customer" || user.role === "organizer") {
+        res.status(403).json({
+          success: false,
+          message: "Access Denied: This account is registered as a Customer. Please sign in via the Customer Portal, or register a new Vendor Partner listing.",
+        });
+        return;
+      }
+    }
+
     const referralCode = await ensureUserReferralCode(user);
     const token = user.generateAuthToken();
 
@@ -267,6 +278,19 @@ export const verifyOtp = async (
       }
     }
 
+    // Role-based portal access control: If verifying on Vendor Portal, established Customer accounts are denied
+    if (role === "vendor") {
+      if (user.role === "customer" || user.role === "organizer") {
+        if (user.isPhoneVerified && user.name && !user.name.startsWith("Guest (")) {
+          res.status(403).json({
+            success: false,
+            message: "Access Denied: This account is registered as a Customer. Please sign in via the Customer Portal, or register a new Vendor Partner listing.",
+          });
+          return;
+        }
+      }
+    }
+
     // Mark verified
     user.isPhoneVerified = true;
     user.otpCode = undefined;
@@ -277,12 +301,10 @@ export const verifyOtp = async (
 
     const assignedRole = role === "organizer" ? "customer" : role;
     if (assignedRole) {
-      if (user.role !== assignedRole) {
-        if (assignedRole === "vendor" || !user.role || user.name?.startsWith("Guest (")) {
-          user.role = assignedRole;
-          if (assignedRole === "vendor" && (!user.kycStatus || user.kycStatus === "verified")) {
-            user.kycStatus = "pending";
-          }
+      if (!user.role || user.name?.startsWith("Guest (")) {
+        user.role = assignedRole;
+        if (assignedRole === "vendor" && (!user.kycStatus || user.kycStatus === "verified")) {
+          user.kycStatus = "pending";
         }
       }
     }

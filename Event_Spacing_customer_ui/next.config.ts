@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   ...(process.env.STATIC_EXPORT === "true" ? { output: "export" as const } : {}),
+  experimental: {
+    agentUpgrade: "security",
+  },
   images: {
     unoptimized: true,
     remotePatterns: [

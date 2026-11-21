@@ -641,7 +641,7 @@ export default function AdminVendorsPage() {
                     onClick={() => toggleSort("businessName")}
                     className="inline-flex items-center gap-1 hover:text-white cursor-pointer uppercase"
                   >
-                    <span>Partner &amp; Brands</span>
+                    <span>Partner Name</span>
                     <ArrowUpDown className="w-3 h-3" />
                   </button>
                 </th>
@@ -682,14 +682,9 @@ export default function AdminVendorsPage() {
                 </tr>
               ) : (
                 paginatedPartners.map((partner) => {
-                  const brandTitle =
-                    partner.brandNames && partner.brandNames.length > 0
-                      ? partner.brandNames.join(" • ")
-                      : partner.businessName;
-
                   return (
                     <tr key={partner.id} className="hover:bg-brand-950/40 transition-colors">
-                      {/* Partner & Brands */}
+                      {/* Partner Name */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           {partner.imageUrl ? (
@@ -709,12 +704,12 @@ export default function AdminVendorsPage() {
                               onClick={() => setViewingPartnerId(partner.id)}
                               className="font-semibold text-white hover:text-gold-300 transition-colors text-left block truncate max-w-[220px] cursor-pointer"
                             >
-                              {brandTitle}
+                              {partner.businessName || partner.ownerName || "Vendor Partner"}
                             </button>
                             <span className="text-[11px] text-gray-400 block truncate max-w-[220px]">
                               Contact:{" "}
                               <strong className="text-gray-200">
-                                {(partner.contactNames || [partner.ownerName]).join(" / ")}
+                                {partner.ownerName || partner.businessName || "Partner"}
                               </strong>
                             </span>
                             <span className="text-[10px] font-mono text-gray-500">
@@ -916,11 +911,10 @@ export default function AdminVendorsPage() {
                   Unified Partner Portfolio
                 </span>
                 <h2 className="font-serif text-xl font-bold text-white">
-                  {(viewingPartner.brandNames || [viewingPartner.businessName]).join(" • ")}
+                  {viewingPartner.businessName || viewingPartner.ownerName}
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Contacts: {(viewingPartner.contactNames || [viewingPartner.ownerName]).join(" / ")}{" "}
-                  &bull; <span className="font-mono">ID: {viewingPartner.id.slice(-8)}</span>
+                  Contact: {viewingPartner.ownerName || viewingPartner.businessName} &bull; <span className="font-mono">ID: {viewingPartner.id.slice(-8)}</span>
                 </p>
               </div>
               <button

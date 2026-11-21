@@ -256,4 +256,16 @@ export const api = {
     getUpi: (): Promise<any> => httpClient.get("/settings/upi"),
     updateUpi: (data: any): Promise<any> => httpClient.put("/settings/upi", data),
   },
+
+  // Reviews & Feedback API
+  reviews: {
+    create: (data: any): Promise<any> => httpClient.post("/reviews", data),
+    getByTarget: (
+      targetType: "venue" | "service",
+      targetId: string,
+      params?: { page?: number; limit?: number }
+    ): Promise<any> =>
+      httpClient.get(`/reviews/target/${targetType}/${targetId}`, { params }),
+    getMyReviews: (): Promise<any> => httpClient.get("/reviews/my-reviews"),
+  },
 };

@@ -4,6 +4,7 @@ import { Venue } from "../models/Venue";
 import { Booking } from "../models/Booking";
 import { MarketplaceService as Vendor } from "../models/MarketplaceService";
 import { User } from "../models/User";
+import { Inquiry } from "../models/Inquiry";
 
 /**
  * GET /api/admin/metrics
@@ -774,12 +775,17 @@ async function buildUnifiedVendorPartners() {
     _id: any;
   }, fallbackPrefix: string): GroupBucket => {
     const vId = entity.vendorId?.toString();
-    const matchedUser =
-      (vId && userById.get(vId)) ||
-      (normalizePhoneTail(entity.phone).length >= 6 && userByPhone.get(normalizePhoneTail(entity.phone))) ||
-      (entity.email && userByEmail.get(entity.email.toLowerCase().trim())) ||
-      (entity.businessName && userByBusiness.get(entity.businessName.trim().toLowerCase())) ||
-      null;
+    // 1. If explicit vendorId exists, strictly associate only with that user account
+    let matchedUser = vId ? userById.get(vId) : null;
+
+    // 2. If no vendorId or not found, fall back to phone/email/biz only if entity has no vendorId set
+    if (!matchedUser && !vId) {
+      matchedUser =
+        (normalizePhoneTail(entity.phone).length >= 6 && userByPhone.get(normalizePhoneTail(entity.phone))) ||
+        (entity.email && userByEmail.get(entity.email.toLowerCase().trim())) ||
+        (entity.businessName && userByBusiness.get(entity.businessName.trim().toLowerCase())) ||
+        null;
+    }
 
     if (matchedUser) {
       return ensureBucketForUser(matchedUser);
@@ -864,8 +870,6 @@ async function buildUnifiedVendorPartners() {
           [
             u?.businessName,
             u?.companyName,
-            ...bucket.services.map((s) => s.businessName),
-            ...bucket.venues.map((v) => v.businessName),
           ]
             .map((v) => (v || "").trim())
             .filter(Boolean)
@@ -920,11 +924,11 @@ async function buildUnifiedVendorPartners() {
         id: partnerId,
         _id: partnerId,
         userId: u?._id?.toString() || null,
-        businessName: brandNames[0] || u?.name || "Vendor Partner",
-        brandNames,
-        ownerName: u?.name || primaryService?.ownerName || "Partner Manager",
+        businessName: brandNames[0] || u?.name || primaryVenue?.businessName || primaryService?.businessName || "Vendor Partner",
+        brandNames: brandNames.length > 0 ? brandNames : [u?.name || primaryVenue?.businessName || primaryService?.businessName || "Vendor Partner"],
+        ownerName: u?.name || primaryVenue?.ownerName || primaryService?.ownerName || "Partner Manager",
         contactNames: Array.from(
-          new Set([u?.name, ...bucket.services.map((s) => s.ownerName)].filter(Boolean))
+          new Set([u?.name || primaryVenue?.ownerName || primaryService?.ownerName || "Partner Manager"].filter(Boolean))
         ),
         phone: u?.phone || primaryService?.phone || "",
         email: u?.email || primaryService?.email || "",
@@ -1285,6 +1289,159 @@ export const rejectVendorPartner = async (
         isVerified: false,
         rejectionReason: user.blockedReason,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/admin/inquiries
+ * Returns all corporate, wedding concierge, venue, and vendor inquiries with pipeline metrics
+ */
+export const getAdminInquiries = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { inquiryType, status, q, page = "1", limit = "20" } = req.query;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const filter: Record<string, any> = {};
+
+    if (inquiryType && inquiryType !== "all") {
+      filter.inquiryType = inquiryType;
+    }
+
+    if (status && status !== "all") {
+      filter.status = status;
+    }
+
+    if (q && typeof q === "string" && q.trim()) {
+      const regex = new RegExp(q.trim(), "i");
+      filter.$or = [
+        { name: regex },
+        { email: regex },
+        { phone: regex },
+        { companyName: regex },
+        { venueName: regex },
+        { vendorName: regex },
+        { message: regex },
+        { eventType: regex },
+      ];
+    }
+
+    const [inquiries, totalCount, allInquiriesForSummary] = await Promise.all([
+      Inquiry.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+      Inquiry.countDocuments(filter),
+      Inquiry.find({}).select("inquiryType status budget"),
+    ]);
+
+    // Compute summary metrics for CRM pipeline
+    let newCount = 0;
+    let inProgressCount = 0;
+    let convertedCount = 0;
+    let corporateCount = 0;
+    let conciergeCount = 0;
+    let venueQuotesCount = 0;
+    let totalPipelineBudget = 0;
+
+    for (const inq of allInquiriesForSummary) {
+      if (inq.status === "new") newCount++;
+      else if (["contacted", "visited", "in_discussion"].includes(inq.status)) inProgressCount++;
+      else if (["booked", "converted"].includes(inq.status)) convertedCount++;
+
+      if (inq.inquiryType === "corporate") corporateCount++;
+      else if (inq.inquiryType === "concierge") conciergeCount++;
+      else if (inq.inquiryType === "venue") venueQuotesCount++;
+
+      if (inq.budget && !Number.isNaN(inq.budget)) {
+        totalPipelineBudget += inq.budget;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: inquiries,
+      summary: {
+        totalInquiries: allInquiriesForSummary.length,
+        newCount,
+        inProgressCount,
+        convertedCount,
+        corporateCount,
+        conciergeCount,
+        venueQuotesCount,
+        totalPipelineBudget,
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(totalCount / limitNum),
+        totalCount,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/admin/inquiries/:id
+ * Updates inquiry status, pipeline stage, and internal notes
+ */
+export const updateAdminInquiry = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    const inquiry = await Inquiry.findById(id);
+    if (!inquiry) {
+      res.status(404).json({ success: false, message: "Inquiry not found." });
+      return;
+    }
+
+    if (status) inquiry.status = status;
+    if (notes !== undefined) inquiry.notes = notes;
+
+    await inquiry.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Inquiry updated successfully.",
+      data: inquiry,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/admin/inquiries/:id
+ * Removes an inquiry lead from the platform
+ */
+export const deleteAdminInquiry = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const inquiry = await Inquiry.findByIdAndDelete(id);
+    if (!inquiry) {
+      res.status(404).json({ success: false, message: "Inquiry not found." });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Inquiry from ${inquiry.name} removed successfully.`,
     });
   } catch (error) {
     next(error);

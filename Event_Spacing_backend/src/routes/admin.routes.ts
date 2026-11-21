@@ -19,6 +19,9 @@ import {
   updateAdminVendorPartner,
   updateAdminVendor,
   deleteAdminVendor,
+  getAdminInquiries,
+  updateAdminInquiry,
+  deleteAdminInquiry,
 } from "../controllers/admin.controller";
 
 const router = Router();
@@ -44,6 +47,10 @@ router.put("/vendors/partner/:userId/reject", rejectVendorPartner);
 router.put("/vendors/partner/:userId", updateAdminVendorPartner);
 router.put("/vendors/:id", updateAdminVendor);
 router.delete("/vendors/:id", deleteAdminVendor);
+
+router.get("/inquiries", getAdminInquiries);
+router.put("/inquiries/:id", updateAdminInquiry);
+router.delete("/inquiries/:id", deleteAdminInquiry);
 
 export default router;
 

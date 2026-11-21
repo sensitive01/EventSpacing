@@ -25,8 +25,10 @@ import {
   AlertTriangle,
   Building2,
   Share2,
+  Star,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { WriteReviewModal } from "@/components/reviews/WriteReviewModal";
 
 export default function BookingDetailPage() {
   const params = useParams();
@@ -40,6 +42,7 @@ export default function BookingDetailPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelSuccess, setCancelSuccess] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -607,6 +610,17 @@ export default function BookingDetailPage() {
 
               {/* Action Buttons (Hidden on Print) */}
               <div className="space-y-2 print:hidden">
+                {(booking.status === "confirmed" || booking.status === "completed") && (
+                  <button
+                    type="button"
+                    onClick={() => setIsReviewModalOpen(true)}
+                    className="w-full bg-gradient-to-r from-amber-500 to-gold-500 hover:from-amber-600 hover:to-gold-600 text-brand-950 font-bold text-xs py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Star className="w-4 h-4 text-brand-950 fill-brand-950" />
+                    <span>Rate &amp; Review This {booking.bookingType === "service" ? "Service" : "Venue"}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handlePrint}
@@ -627,6 +641,18 @@ export default function BookingDetailPage() {
           </div>
         </div>
       </section>
+
+      {/* Write Review Modal */}
+      {booking && (
+        <WriteReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          targetType={booking.bookingType === "service" ? "service" : "venue"}
+          targetId={booking.venueId || booking.vendorServiceId || id}
+          targetName={booking.venueName || "Event Reservation"}
+          bookingId={booking._id || id}
+        />
+      )}
     </div>
   );
 }

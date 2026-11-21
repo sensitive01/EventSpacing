@@ -251,3 +251,41 @@ export interface AdminUnifiedPartnerItem {
   servicesCount: number;
   createdAt: string;
 }
+
+export type InquiryType = "corporate" | "concierge" | "venue" | "vendor";
+export type InquiryStatus = "new" | "contacted" | "visited" | "booked" | "declined" | "in_discussion" | "converted" | "closed";
+
+export interface AdminInquiryItem {
+  id: string;
+  _id: string;
+  inquiryType: InquiryType;
+  name: string;
+  email: string;
+  phone: string;
+  companyName?: string;
+  eventType?: string;
+  eventDate?: string;
+  guestCount?: number | string;
+  budget?: number;
+  message?: string;
+  venueId?: string;
+  venueName?: string;
+  vendorId?: string;
+  vendorName?: string;
+  status: InquiryStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminInquiriesSummary {
+  totalInquiries: number;
+  newCount: number;
+  inProgressCount: number;
+  convertedCount: number;
+  corporateCount: number;
+  conciergeCount: number;
+  venueQuotesCount: number;
+  totalPipelineBudget: number;
+}
+

@@ -79,6 +79,17 @@ export const api = {
       }),
     deleteVendor: (id: string) =>
       request(`/admin/vendors/${id}`, { method: "DELETE" }),
+    getInquiries: (params?: Record<string, any>) => {
+      const q = params ? `?${new URLSearchParams(params as any).toString()}` : "";
+      return request<any>(`/admin/inquiries${q}`);
+    },
+    updateInquiry: (id: string, data: { status?: string; notes?: string }) =>
+      request<any>(`/admin/inquiries/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteInquiry: (id: string) =>
+      request(`/admin/inquiries/${id}`, { method: "DELETE" }),
   },
   venues: {
     getAll: () => request<any[]>("/venues"),
