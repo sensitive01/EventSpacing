@@ -31,6 +31,7 @@ export interface IUser extends Document {
   referralCode?: string;
   referredBy?: mongoose.Types.ObjectId | null;
   referralCredits: number;
+  savedVenues?: mongoose.Types.ObjectId[];
   comparePassword(candidatePassword: string): Promise<boolean>;
   generateAuthToken(): string;
   createdAt: Date;
@@ -98,6 +99,12 @@ const UserSchema = new Schema<IUser>(
       type: String,
       default: "",
     },
+    savedVenues: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Venue",
+      },
+    ],
     isPhoneVerified: {
       type: Boolean,
       default: false,

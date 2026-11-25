@@ -405,38 +405,37 @@ export const Footer: React.FC = () => {
             <p className="text-[11px] text-white/60">
               Book venues on the go!
             </p>
-
-            <div className="flex flex-col gap-2 pt-1">
+            <div className="flex flex-col gap-2.5 pt-1">
               {/* Google Play Official Badge */}
-              <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-black/90 border border-white/20 hover:border-gold-400/80 cursor-pointer transition-all shadow-sm w-fit group">
+              <div className="flex items-center gap-3 px-3.5 py-2 rounded-lg bg-black/90 border border-white/20 hover:border-gold-400/80 cursor-pointer transition-all shadow-sm w-[172px] group">
                 {/* 4-Color Play Triangle Icon */}
-                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 512 512">
-                  <path fill="#00C3FF" d="M32.5 12.8c-7.6 8.3-12.2 20.4-12.2 35.8v414.8c0 15.4 4.6 27.5 12.2 35.8l2 2 232-232v-5.6l-232-232-2 1.2z" />
-                  <path fill="#00E676" d="M336.5 338.4l-70-70v-5.6l70-70 1.6.9 83 47.1c23.7 13.5 23.7 35.6 0 49.1l-83 47.1-1.6 1.4z" />
-                  <path fill="#FFD600" d="M338.1 337L266.5 265.5l-232 232c7.8 8.3 20.8 9.3 35.3 1.1l230.2-130.6z" />
-                  <path fill="#FF334B" d="M338.1 175.2L69.8 23c-14.5-8.2-27.5-7.2-35.3 1.1l232 232 71.6-40.9z" />
+                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                  <path fill="#00D2FF" d="M3.61 1.814L13.793 12 3.61 22.186a1.75 1.75 0 0 1-.61-1.35V3.164c0-.53.23-.998.61-1.35z" />
+                  <path fill="#00F076" d="M17.204 8.589L13.793 12 3.61 1.814c.426-.342 1.03-.426 1.62-.09l11.974 6.865z" />
+                  <path fill="#FFD500" d="M20.386 10.414c1.052.603 1.052 2.569 0 3.172l-3.182 1.825L13.793 12l3.411-3.411 3.182 1.825z" />
+                  <path fill="#FF3A44" d="M17.204 15.411L5.23 22.276c-.59.336-1.194.252-1.62-.09L13.793 12l3.411 3.411z" />
                 </svg>
                 <div className="text-left">
-                  <div className="text-[7.5px] uppercase tracking-wider text-white/70 font-semibold leading-tight">
+                  <div className="text-[8px] uppercase tracking-wider text-white/70 font-semibold leading-tight">
                     GET IT ON
                   </div>
-                  <div className="text-xs font-bold text-white tracking-wide">
+                  <div className="text-xs font-bold text-white tracking-wide leading-tight">
                     Google Play
                   </div>
                 </div>
               </div>
 
               {/* Apple App Store Official Badge */}
-              <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-black/90 border border-white/20 hover:border-gold-400/80 cursor-pointer transition-all shadow-sm w-fit group">
+              <div className="flex items-center gap-3 px-3.5 py-2 rounded-lg bg-black/90 border border-white/20 hover:border-gold-400/80 cursor-pointer transition-all shadow-sm w-[172px] group">
                 {/* Apple Silhouette Icon */}
-                <svg className="w-5 h-5 fill-white flex-shrink-0" viewBox="0 0 170 170">
-                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.7-7.9-11.99-14.58-6.19-9.59-11.02-20.08-14.49-31.48-3.48-11.4-5.22-22.18-5.22-32.33 0-14.38 3.59-26.25 10.77-35.61 7.18-9.36 16.29-14.16 27.32-14.39 4.35 0 9.38 1.17 15.09 3.51 5.71 2.34 9.4 3.57 11.08 3.69 1.57-.12 5.37-1.39 11.41-3.81 6.04-2.42 11.08-3.51 15.12-3.27 12.18.61 21.75 4.8 28.71 12.57-10.78 6.53-16.05 15.46-15.82 26.79.23 8.82 3.54 16.12 9.94 21.9 6.4 5.78 14.05 9.17 22.95 10.18-2.07 6.1-4.74 12.33-8.01 18.7zM119.22 31.86c0-7.18 2.51-13.88 7.53-20.1 5.02-6.22 11.33-10.37 18.93-12.45.35 2.12.53 4.12.53 6 0 7.29-2.67 14.13-8.01 20.52-5.34 6.39-11.66 10.02-18.98 10.89-.23-1.64-.35-3.26-.35-4.86z" />
+                <svg className="w-5 h-5 fill-white flex-shrink-0" viewBox="0 0 24 24">
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.96 6.33c.68-.83 1.14-1.98 1.01-3.13-.98.04-2.17.65-2.87 1.48-.62.72-1.17 1.89-1.02 3.01 1.09.08 2.2-.53 2.88-1.36z" />
                 </svg>
                 <div className="text-left">
-                  <div className="text-[7.5px] uppercase tracking-wider text-white/70 font-semibold leading-tight">
+                  <div className="text-[8px] uppercase tracking-wider text-white/70 font-semibold leading-tight">
                     Download on the
                   </div>
-                  <div className="text-xs font-bold text-white tracking-wide">
+                  <div className="text-xs font-bold text-white tracking-wide leading-tight">
                     App Store
                   </div>
                 </div>

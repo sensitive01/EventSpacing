@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ArrowUpDown,
   Building2,
   Check,
@@ -14,6 +15,7 @@ import {
   Eye,
   Loader2,
   MapPin,
+  Power,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -134,6 +136,8 @@ export default function AdminVenuesCatalogPage() {
     () => venues.find((v) => getVenueId(v) === viewingVenueId) || null,
     [venues, viewingVenueId]
   );
+
+  const [statusConfirmVenue, setStatusConfirmVenue] = useState<AdminCatalogVenue | null>(null);
 
   // Distinct dropdown options
   const cities = useMemo(() => {
@@ -795,20 +799,33 @@ export default function AdminVenuesCatalogPage() {
                         </select>
                       </td>
 
-                      {/* Status toggle */}
+                      {/* Listing Status dropdown */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => toggleSuspension(v)}
-                          className={`px-3 py-1 rounded-xl text-[11px] font-bold transition-colors cursor-pointer ${
+                        <select
+                          aria-label={`Listing status for ${v.name}`}
+                          value={isLive ? "live" : "suspended"}
+                          onChange={(e) => {
+                            const nextStatus = e.target.value;
+                            if (
+                              (isLive && nextStatus === "suspended") ||
+                              (!isLive && nextStatus === "live")
+                            ) {
+                              setStatusConfirmVenue(v);
+                            }
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-bold focus:outline-none cursor-pointer transition-colors ${
                             isLive
-                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-red-500/20 hover:text-red-300"
-                              : "bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-emerald-500/20 hover:text-emerald-300"
+                              ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 focus:border-emerald-400"
+                              : "bg-rose-500/15 border-rose-500/40 text-rose-300 focus:border-rose-400"
                           }`}
-                          title={isLive ? "Click to suspend listing" : "Click to restore live"}
                         >
-                          {isLive ? "Live (Active)" : "Suspended"}
-                        </button>
+                          <option value="live" className="bg-[#14061d] text-emerald-300 font-semibold">
+                            ● Live (Active)
+                          </option>
+                          <option value="suspended" className="bg-[#14061d] text-rose-300 font-semibold">
+                            ● Suspended
+                          </option>
+                        </select>
                       </td>
 
                       {/* Actions */}
@@ -952,17 +969,32 @@ export default function AdminVenuesCatalogPage() {
                   >
                     {viewingVenue.isVerified ? "Verified ✓" : "Mark Verified"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleSuspension(viewingVenue)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                  <select
+                    aria-label={`Listing status for ${viewingVenue.name}`}
+                    value={(viewingVenue.status || "live") === "live" ? "live" : "suspended"}
+                    onChange={(e) => {
+                      const isViewingLive = (viewingVenue.status || "live") === "live";
+                      const nextStatus = e.target.value;
+                      if (
+                        (isViewingLive && nextStatus === "suspended") ||
+                        (!isViewingLive && nextStatus === "live")
+                      ) {
+                        setStatusConfirmVenue(viewingVenue);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border focus:outline-none cursor-pointer transition-colors ${
                       (viewingVenue.status || "live") === "live"
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                        : "bg-red-500/20 text-red-300 border-red-500/30"
+                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+                        : "bg-rose-500/15 text-rose-300 border-rose-500/40"
                     }`}
                   >
-                    {(viewingVenue.status || "live") === "live" ? "Live" : "Suspended"}
-                  </button>
+                    <option value="live" className="bg-[#14061d] text-emerald-300 font-semibold">
+                      ● Live (Active)
+                    </option>
+                    <option value="suspended" className="bg-[#14061d] text-rose-300 font-semibold">
+                      ● Suspended
+                    </option>
+                  </select>
                 </div>
               </div>
 
@@ -1069,6 +1101,82 @@ export default function AdminVenuesCatalogPage() {
           </div>
         </div>
       )}
+
+      {/* ===================================================================== */}
+      {/* LISTING STATUS CONFIRMATION POPUP MODAL                               */}
+      {/* ===================================================================== */}
+      {statusConfirmVenue && (() => {
+        const isCurrentlyLive = (statusConfirmVenue.status || "live") === "live";
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <div className="w-full max-w-md bg-[#14061d] border border-brand-800 rounded-3xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
+                      isCurrentlyLive
+                        ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                        : "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                    }`}
+                  >
+                    {isCurrentlyLive ? (
+                      <AlertTriangle className="w-5 h-5" />
+                    ) : (
+                      <ShieldCheck className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-lg font-bold text-white">
+                      {isCurrentlyLive ? "Suspend Venue Listing?" : "Restore Venue to Live?"}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[260px]">
+                      {statusConfirmVenue.name}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStatusConfirmVenue(null)}
+                  className="p-1.5 rounded-xl bg-brand-950 border border-brand-800 text-gray-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-300 leading-relaxed bg-brand-950/60 border border-brand-900/60 rounded-2xl p-4">
+                {isCurrentlyLive
+                  ? `Suspending "${statusConfirmVenue.name}" will immediately hide it from Customer Discovery and prevent new customer bookings until restored.`
+                  : `Restoring "${statusConfirmVenue.name}" will immediately make this property live on Customer Discovery and open for bookings.`}
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setStatusConfirmVenue(null)}
+                  className="px-4 py-2.5 rounded-xl bg-brand-950 border border-brand-800 text-xs font-semibold text-gray-300 hover:text-white transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleSuspension(statusConfirmVenue);
+                    setStatusConfirmVenue(null);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer ${
+                    isCurrentlyLive
+                      ? "bg-rose-600 hover:bg-rose-500 text-white"
+                      : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                  }`}
+                >
+                  <Power className="w-3.5 h-3.5" />
+                  <span>{isCurrentlyLive ? "Confirm Suspend" : "Restore Live"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

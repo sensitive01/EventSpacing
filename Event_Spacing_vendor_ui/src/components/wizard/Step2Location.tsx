@@ -5,9 +5,21 @@
  * @description Step 2 form in the venue wizard managing address, city, map pin coordinates, and direct contacts.
  */
 
-import React, { useState } from "react";
-import { MapPin, ArrowLeft, ArrowRight, Compass } from "lucide-react";
+import React from "react";
+import dynamic from "next/dynamic";
+import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { useVenueWizard } from "@/context/VenueWizardContext";
+import type { MapLocationResult } from "./OpenStreetMapPicker";
+
+const OpenStreetMapPicker = dynamic(() => import("./OpenStreetMapPicker"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-64 sm:h-72 rounded-2xl border border-gray-200 bg-gray-50 flex items-center justify-center gap-2 text-xs text-gray-500">
+      <Loader2 className="w-4 h-4 animate-spin text-brand-700" />
+      <span>Loading OpenStreetMap...</span>
+    </div>
+  ),
+});
 
 /**
  * Step 2: Location & Contact Information component matching Screen 4.
@@ -18,8 +30,6 @@ export const Step2Location: React.FC = () => {
   const { state, updateStep2, nextStep, prevStep } = useVenueWizard();
   const { step2 } = state;
 
-  const [isPickingLocation, setIsPickingLocation] = useState(false);
-
   /**
    * Submits Step 2 after validating mandatory address and phone contact.
    *
@@ -29,6 +39,10 @@ export const Step2Location: React.FC = () => {
     e.preventDefault();
     if (!step2.addressLine1.trim()) {
       alert("Please enter Address Line 1");
+      return;
+    }
+    if (!step2.city.trim() || !step2.state.trim() || !step2.pincode.trim()) {
+      alert("Please select a location on the map or enter City, State, and Pincode.");
       return;
     }
     if (!step2.primaryContactName.trim()) {
@@ -43,14 +57,16 @@ export const Step2Location: React.FC = () => {
   };
 
   /**
-   * Simulates map coordinate pinpointing on click.
+   * Updates City, State, Pincode, and GPS coordinates when a location is selected on OpenStreetMap.
    */
-  const handleMapClick = () => {
-    setIsPickingLocation(true);
-    setTimeout(() => {
-      setIsPickingLocation(false);
-      alert("Location pinned successfully! GPS Coordinates saved.");
-    }, 600);
+  const handleMapLocationSelect = (loc: MapLocationResult) => {
+    updateStep2({
+      mapCoordinates: { lat: loc.lat, lng: loc.lng },
+      ...(loc.city ? { city: loc.city } : {}),
+      ...(loc.state ? { state: loc.state } : {}),
+      ...(loc.pincode ? { pincode: loc.pincode } : {}),
+      ...(!step2.addressLine2 && loc.locality ? { addressLine2: loc.locality } : {}),
+    });
   };
 
   return (
@@ -109,34 +125,28 @@ export const Step2Location: React.FC = () => {
               <label className="block text-xs font-bold text-gray-800 mb-1.5">
                 City <span className="text-rose-500">*</span>
               </label>
-              <select
+              <input
+                type="text"
+                required
+                placeholder="Fetched from map or enter city"
                 value={step2.city}
                 onChange={(e) => updateStep2({ city: e.target.value })}
                 className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700 bg-white"
-              >
-                <option value="Bengaluru">Bengaluru</option>
-                <option value="Mumbai">Mumbai</option>
-                <option value="Delhi NCR">Delhi NCR</option>
-                <option value="Hyderabad">Hyderabad</option>
-                <option value="Chennai">Chennai</option>
-              </select>
+              />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-gray-800 mb-1.5">
                 State <span className="text-rose-500">*</span>
               </label>
-              <select
+              <input
+                type="text"
+                required
+                placeholder="Fetched from map or enter state"
                 value={step2.state}
                 onChange={(e) => updateStep2({ state: e.target.value })}
                 className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700 bg-white"
-              >
-                <option value="Karnataka">Karnataka</option>
-                <option value="Maharashtra">Maharashtra</option>
-                <option value="Delhi">Delhi</option>
-                <option value="Telangana">Telangana</option>
-                <option value="Tamil Nadu">Tamil Nadu</option>
-              </select>
+              />
             </div>
 
             <div>
@@ -147,7 +157,7 @@ export const Step2Location: React.FC = () => {
                 type="text"
                 required
                 maxLength={6}
-                placeholder="Enter pincode"
+                placeholder="Fetched from map or enter pincode"
                 value={step2.pincode}
                 onChange={(e) => updateStep2({ pincode: e.target.value })}
                 className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-700"
@@ -155,27 +165,19 @@ export const Step2Location: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Map Picker Simulation */}
-          <div className="relative rounded-2xl overflow-hidden border border-gray-300 bg-gray-100 h-44 flex items-center justify-center">
-            {/* Map styling grid graphic */}
-            <div className="absolute inset-0 bg-[#e5e3df] bg-[radial-gradient(#c8c5be_1px,transparent_1px)] [background-size:16px_16px] opacity-80" />
-
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg animate-bounce">
-                <MapPin className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-bold text-gray-800 bg-white/90 px-3 py-1 rounded-full shadow-sm">
-                Bengaluru, Karnataka (Lat: 12.9784, Lng: 77.6408)
+          {/* Interactive OpenStreetMap Picker */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-800">
+              Pin Venue on OpenStreetMap{" "}
+              <span className="text-[11px] font-normal text-gray-500">
+                (Click or drag pin to auto-fill City, State &amp; Pincode)
               </span>
-              <button
-                type="button"
-                onClick={handleMapClick}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-800 text-white text-xs font-semibold hover:bg-brand-900 shadow-sm"
-              >
-                <Compass className="w-3.5 h-3.5" />
-                <span>{isPickingLocation ? "Pinning..." : "Pick Location on Map"}</span>
-              </button>
-            </div>
+            </label>
+            <OpenStreetMapPicker
+              lat={step2.mapCoordinates?.lat || 12.9716}
+              lng={step2.mapCoordinates?.lng || 77.5946}
+              onLocationSelect={handleMapLocationSelect}
+            />
           </div>
         </div>
 

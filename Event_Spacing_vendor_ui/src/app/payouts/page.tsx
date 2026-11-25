@@ -59,7 +59,12 @@ export default function VendorPayoutsPage() {
 
   const totalGross = payouts.reduce((acc, p) => acc + (p.grossAmount || 0), 0);
   const totalCommission = payouts.reduce((acc, p) => acc + (p.platformFeeAmount || 0), 0);
-  const totalNet = payouts.reduce((acc, p) => acc + (p.netPayout || 0), 0);
+  const totalPaid = payouts
+    .filter((p) => p.status === "paid")
+    .reduce((acc, p) => acc + (p.netPayout || 0), 0);
+  const totalPending = payouts
+    .filter((p) => p.status !== "paid")
+    .reduce((acc, p) => acc + (p.netPayout || 0), 0);
 
   const bankName = profile?.bankDetails?.bankName || "Bank Account Pending Setup";
   const accountNumber = profile?.bankDetails?.accountNumber || "Not Linked";
@@ -110,7 +115,7 @@ export default function VendorPayoutsPage() {
 
         <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Net Disbursed</span>
-          <div className="text-2xl font-bold text-emerald-700 mt-2">₹{totalNet.toLocaleString()}</div>
+          <div className="text-2xl font-bold text-emerald-700 mt-2">₹{totalPaid.toLocaleString()}</div>
           <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" /> Direct NEFT credit
           </p>
@@ -118,7 +123,7 @@ export default function VendorPayoutsPage() {
 
         <div className="p-5 rounded-2xl bg-white border border-gray-200/80 shadow-soft">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pending Settlements</span>
-          <div className="text-2xl font-bold text-gold-700 mt-2">₹0</div>
+          <div className="text-2xl font-bold text-gold-700 mt-2">₹{totalPending.toLocaleString()}</div>
           <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" /> Processed within 48h of event
           </p>

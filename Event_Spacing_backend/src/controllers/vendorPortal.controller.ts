@@ -10,12 +10,11 @@ import {
 } from "../models/MarketplaceService";
 import { Inquiry } from "../models/Inquiry";
 import { Booking } from "../models/Booking";
+import { PlatformSettings } from "../models/Settings";
 import { Review } from "../models/Review";
+import { CalendarOverride } from "../models/CalendarOverride";
 import { recalculateTargetRating } from "./review.controller";
 import { createBookingRecord, resolveAndValidateBookingItem } from "./booking.controller";
-
-// In-memory slot storage for dynamic calendar slot blocking if no separate collection
-export const venueCalendarOverrides: Record<string, any[]> = {};
 
 /**
  * Helper to reliably resolve vendor partner identity across JWT tokens, custom headers, and query parameters.
@@ -741,12 +740,21 @@ export const getVendorCalendar = async (
       });
       return;
     }
-    const customSlots = venueCalendarOverrides[String(targetVenueId)] || [];
+    const [customOverrides, realBookings] = targetVenueId
+      ? await Promise.all([
+          CalendarOverride.find({ venueId: targetVenueId }).lean(),
+          Booking.find({ venueId: targetVenueId, status: { $ne: "cancelled" } }),
+        ])
+      : [[], []];
 
-    // Fetch real confirmed customer bookings from MongoDB Atlas
-    const realBookings = targetVenueId
-      ? await Booking.find({ venueId: targetVenueId, status: { $ne: "cancelled" } })
-      : [];
+    const customSlots = customOverrides.map((o: any) => ({
+      date: o.date,
+      status: o.status,
+      notes: o.notes,
+      priceModifier: o.priceModifier,
+      bookedBy: o.bookedBy,
+      bookingRef: o.bookingRef,
+    }));
 
     const bookingSlots = realBookings.map((b) => ({
       date: b.eventDate,
@@ -782,8 +790,24 @@ export const toggleCalendarSlot = async (
   try {
     const { venueId = "default", date, status, notes, priceModifier } = req.body;
 
+    if (!venueId || !mongoose.isValidObjectId(venueId)) {
+      res.status(400).json({
+        success: false,
+        message: "Valid venueId is required to update calendar slot.",
+      });
+      return;
+    }
+
+    if (!date) {
+      res.status(400).json({
+        success: false,
+        message: "Date (YYYY-MM-DD) is required.",
+      });
+      return;
+    }
+
     // Prevent unblocking dates that have confirmed customer bookings in MongoDB
-    if (status === "available" && mongoose.isValidObjectId(venueId)) {
+    if (status === "available") {
       const activeBooking = await Booking.findOne({
         venueId,
         eventDate: date,
@@ -798,24 +822,39 @@ export const toggleCalendarSlot = async (
       }
     }
 
-    const venueKey = String(venueId);
-    if (!venueCalendarOverrides[venueKey]) {
-      venueCalendarOverrides[venueKey] = [];
-    }
+    let savedSlot: any = { date, status, notes, priceModifier };
 
-    const existingIndex = venueCalendarOverrides[venueKey].findIndex((s) => s.date === date);
-    const newSlot = { date, status, notes, priceModifier };
-
-    if (existingIndex >= 0) {
-      venueCalendarOverrides[venueKey][existingIndex] = newSlot;
+    if (status === "available" && (priceModifier === undefined || priceModifier === null) && !notes) {
+      await CalendarOverride.deleteOne({ venueId, date });
     } else {
-      venueCalendarOverrides[venueKey].push(newSlot);
+      const updated: any = await CalendarOverride.findOneAndUpdate(
+        { venueId, date },
+        {
+          $set: {
+            venueId,
+            date,
+            status: status || "blocked",
+            notes: notes || "",
+            ...(priceModifier !== undefined ? { priceModifier } : {}),
+          },
+        },
+        { upsert: true, new: true }
+      ).lean();
+
+      if (updated) {
+        savedSlot = {
+          date: updated.date,
+          status: updated.status,
+          notes: updated.notes,
+          priceModifier: updated.priceModifier,
+        };
+      }
     }
 
     res.status(200).json({
       success: true,
       message: `Date ${date} marked as ${status}`,
-      data: newSlot,
+      data: savedSlot,
     });
   } catch (error) {
     next(error);
@@ -831,20 +870,9 @@ export const getVendorPayouts = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const userId = (req as any).user?.id || (req as any).user?._id;
-    const user = await User.findById(userId);
+    const user = await resolveVendorUser(req);
 
-    const venues = user
-      ? await Venue.find({
-          $or: [
-            { vendorId: user._id },
-            ...(user.businessName ? [{ businessName: user.businessName }] : []),
-          ],
-        })
-      : [];
-
-    // If new vendor has 0 venues, return empty payouts ledger
-    if (venues.length === 0) {
+    if (!user) {
       res.status(200).json({
         success: true,
         data: [],
@@ -852,62 +880,72 @@ export const getVendorPayouts = async (
       return;
     }
 
-    const payouts = [
-      {
-        id: "PAY-9041",
-        transactionDate: "2026-10-18",
-        bookingId: "BK-8750",
-        customerName: "Rohan Deshmukh",
-        venueName: venues[0]?.name || "The Royal Crystal Palace",
-        grossAmount: 185000,
-        platformFeePercent: 10,
-        platformFeeAmount: 18500,
-        netPayout: 166500,
-        status: "paid",
-        payoutMethod: "NEFT to HDFC Bank (...6789)",
-        payoutReference: "UTR261018902188",
-      },
-      {
-        id: "PAY-9032",
-        transactionDate: "2026-10-12",
-        bookingId: "BK-8711",
-        customerName: "Swati Narang",
-        venueName: "Emerald Glass Pavilion",
-        grossAmount: 135000,
-        platformFeePercent: 10,
-        platformFeeAmount: 13500,
-        netPayout: 121500,
-        status: "paid",
-        payoutMethod: "NEFT to HDFC Bank (...6789)",
-        payoutReference: "UTR261012881023",
-      },
-      {
-        id: "PAY-9045",
-        transactionDate: "2026-10-22",
-        bookingId: "BK-8821",
-        customerName: "Raghav & Suniti",
-        venueName: "The Royal Crystal Palace",
-        grossAmount: 185000,
-        platformFeePercent: 10,
-        platformFeeAmount: 18500,
-        netPayout: 166500,
-        status: "processing",
-        payoutMethod: "NEFT to HDFC Bank (...6789)",
-      },
-      {
-        id: "PAY-9050",
-        transactionDate: "2026-10-23",
-        bookingId: "BK-8829",
-        customerName: "Titan Corp",
-        venueName: "The Royal Crystal Palace",
-        grossAmount: 120000,
-        platformFeePercent: 10,
-        platformFeeAmount: 12000,
-        netPayout: 108000,
-        status: "pending",
-        payoutMethod: "NEFT to HDFC Bank (...6789)",
-      },
-    ];
+    const [venues, services, settings] = await Promise.all([
+      Venue.find({ vendorId: user._id }).select("_id name"),
+      Vendor.find({ vendorId: user._id }).select("_id businessName"),
+      PlatformSettings.findOne().lean(),
+    ]);
+
+    const venueIds = venues.map((v) => v._id);
+    const serviceIds = services.map((s) => s._id);
+
+    if (venueIds.length === 0 && serviceIds.length === 0) {
+      res.status(200).json({
+        success: true,
+        data: [],
+      });
+      return;
+    }
+
+    const bookingOrConditions: any[] = [];
+    if (venueIds.length > 0) bookingOrConditions.push({ venueId: { $in: venueIds } });
+    if (serviceIds.length > 0) bookingOrConditions.push({ vendorServiceId: { $in: serviceIds } });
+
+    const realBookings = await Booking.find({
+      $or: bookingOrConditions,
+      status: { $in: ["confirmed", "completed", "pending_approval"] },
+    }).sort({ createdAt: -1 });
+
+    const feePercent = (settings as any)?.commissionPercentage ?? 10;
+    const bankName = user.bankDetails?.bankName;
+    const acctTail = user.bankDetails?.accountNumber
+      ? `...${user.bankDetails.accountNumber.slice(-4)}`
+      : "";
+    const payoutMethod = bankName
+      ? `NEFT to ${bankName}${acctTail ? ` (${acctTail})` : ""}`
+      : "Bank Account Pending Setup";
+
+    const payouts = realBookings.map((b) => {
+      const grossAmount = b.totalAmount || 0;
+      const platformFeeAmount = Math.round(grossAmount * (feePercent / 100));
+      const netPayout = Math.max(0, grossAmount - platformFeeAmount);
+
+      let payoutStatus: "paid" | "processing" | "pending" = "pending";
+      if (b.status === "completed") {
+        payoutStatus = "paid";
+      } else if (b.status === "confirmed") {
+        payoutStatus = "processing";
+      }
+
+      return {
+        id: `PAY-${(b.bookingRef || b._id.toString()).slice(-6).toUpperCase()}`,
+        transactionDate: b.createdAt
+          ? new Date(b.createdAt).toISOString().split("T")[0]
+          : b.eventDate,
+        bookingId: b.bookingRef,
+        customerName: b.customerName,
+        venueName: b.venueName || b.selectedSpaceName || "Event Booking",
+        grossAmount,
+        platformFeePercent: feePercent,
+        platformFeeAmount,
+        netPayout,
+        status: payoutStatus,
+        payoutMethod,
+        payoutReference:
+          b.paymentDetails?.transactionId ||
+          (payoutStatus === "paid" ? `UTR${b._id.toString().slice(-10).toUpperCase()}` : undefined),
+      };
+    });
 
     res.status(200).json({
       success: true,

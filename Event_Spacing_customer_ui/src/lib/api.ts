@@ -143,6 +143,11 @@ export const api = {
 
     getMe: (): Promise<any> => httpClient.get("/auth/me"),
 
+    getWishlist: (): Promise<any> => httpClient.get("/auth/wishlist"),
+
+    toggleWishlist: (venueId: string): Promise<any> =>
+      httpClient.post(`/auth/wishlist/${venueId}`, {}),
+
     updateProfile: (data: {
       name?: string;
       email?: string;

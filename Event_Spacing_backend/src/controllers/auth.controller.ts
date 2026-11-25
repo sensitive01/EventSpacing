@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { User } from "../models/User";
 import { AuthenticatedRequest, formatAccountBlockedMessage } from "../middleware/auth.middleware";
 import { applyReferralBetweenUsers, ensureUserReferralCode } from "./referral.controller";
@@ -489,6 +490,100 @@ export const changePassword = async (
     res.status(200).json({
       success: true,
       message: "Password updated successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/auth/wishlist
+ * Returns the authenticated user's saved venues list and IDs.
+ */
+export const getWishlist = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    const user = await User.findById(req.user._id).populate({
+      path: "savedVenues",
+      match: { isActive: true, status: { $nin: ["under_review", "rejected", "draft"] } },
+    });
+
+    const venues = (user?.savedVenues || []) as any[];
+    const savedIds = venues.map((v) => String(v._id || v));
+
+    res.status(200).json({
+      success: true,
+      count: venues.length,
+      savedIds,
+      data: venues.map((v) => ({
+        ...v.toObject(),
+        id: String(v._id),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/auth/wishlist/:venueId
+ * Toggles a venue in the authenticated user's savedVenues wishlist.
+ */
+export const toggleWishlist = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    const venueId = String(req.params.venueId || "");
+    if (!mongoose.Types.ObjectId.isValid(venueId)) {
+      res.status(400).json({ success: false, message: "Invalid Venue ID format." });
+      return;
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found." });
+      return;
+    }
+
+    const currentIds = (user.savedVenues || []).map((id) => id.toString());
+    const existsIndex = currentIds.indexOf(venueId);
+    let isSaved = false;
+
+    if (existsIndex >= 0) {
+      user.savedVenues = (user.savedVenues || []).filter(
+        (id) => id.toString() !== venueId
+      );
+      isSaved = false;
+    } else {
+      user.savedVenues = [
+        ...(user.savedVenues || []),
+        new mongoose.Types.ObjectId(venueId),
+      ];
+      isSaved = true;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      isSaved,
+      savedIds: (user.savedVenues || []).map((id) => id.toString()),
+      message: isSaved ? "Venue saved to your wishlist." : "Venue removed from your wishlist.",
     });
   } catch (error) {
     next(error);

@@ -41,6 +41,7 @@ import { StarRating } from "@/components/common/StarRating";
 import { Badge } from "@/components/common/Badge";
 import { PaymentGatewayModal } from "@/components/booking/PaymentGatewayModal";
 import { useBookingCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { VenueReviewsSection } from "@/components/reviews/VenueReviewsSection";
 
 export default function VenueDetailsClient() {
@@ -55,8 +56,11 @@ export default function VenueDetailsClient() {
 
   // Gallery states
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [isLiked, setIsLiked] = useState(false);
+  const { isSaved, toggleSave } = useWishlist();
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const venueIdStr = String(venue?._id || venue?.id || "");
+  const isLiked = isSaved(venueIdStr);
 
   // Sidebar Tab Switcher ("book" = Instant Reserve, "inquire" = Request Quote)
   const [sidebarTab, setSidebarTab] = useState<"book" | "inquire">("book");
@@ -256,10 +260,17 @@ export default function VenueDetailsClient() {
     );
   }
 
-  const galleryImages =
+  const rawImages =
     venue.images && venue.images.length > 0
       ? venue.images
       : [venue.coverImage || "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1200&q=80"];
+
+  // Ensure coverImage is preserved and deduplicate URLs
+  const allCandidateImages = [venue.coverImage, ...rawImages].filter(Boolean);
+  const galleryImages: string[] = Array.from(new Set(allCandidateImages));
+  if (galleryImages.length === 0) {
+    galleryImages.push("https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1200&q=80");
+  }
 
   const hasFreeVenue =
     venue.pricing?.hasFreeVenueOption || venue.hasFreeVenueOption || venue.badge === "Free Venue Plan";
@@ -470,9 +481,9 @@ export default function VenueDetailsClient() {
               <span>{copiedLink ? "Copied Link!" : "Share"}</span>
             </button>
             <button
-              onClick={() => setIsLiked(!isLiked)}
-              className="p-1.5 rounded-lg text-gray-600 hover:text-rose-600 hover:bg-gray-100 transition-colors"
-              title="Save to Wishlist"
+              onClick={() => venue && toggleSave(venue)}
+              className="p-1.5 rounded-lg text-gray-600 hover:text-rose-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              title={isLiked ? "Remove from Wishlist" : "Save to Wishlist"}
             >
               <Heart className={`w-4 h-4 ${isLiked ? "fill-rose-500 text-rose-500" : ""}`} />
             </button>
@@ -483,14 +494,18 @@ export default function VenueDetailsClient() {
       {/* 2. Hero Interactive Photo Gallery */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Main Large Showcase Photo (8 cols) */}
-          <div className="lg:col-span-8 relative h-[360px] sm:h-[480px] rounded-3xl overflow-hidden bg-gray-900 shadow-md">
+          {/* Main Large Showcase Photo */}
+          <div
+            className={`${
+              galleryImages.length === 1 ? "lg:col-span-12" : "lg:col-span-8"
+            } relative h-[360px] sm:h-[480px] rounded-3xl overflow-hidden bg-gray-900 shadow-md`}
+          >
             <Image
               src={galleryImages[activeImageIndex] || galleryImages[0]}
               alt={venue.name}
               fill
               priority
-              sizes="(max-width: 1024px) 100vw, 66vw"
+              sizes={galleryImages.length === 1 ? "100vw" : "(max-width: 1024px) 100vw, 66vw"}
               className="object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
@@ -506,7 +521,7 @@ export default function VenueDetailsClient() {
               {venue.badge && <Badge variant={venue.badge} className="shadow-md" />}
             </div>
 
-            {/* Gallery Navigation Controls */}
+            {/* Gallery Navigation Controls (Only if multiple photos exist) */}
             {galleryImages.length > 1 && (
               <>
                 <button
@@ -532,30 +547,40 @@ export default function VenueDetailsClient() {
 
             {/* Photo Counter Pill */}
             <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md text-white text-xs px-3 py-1 rounded-full font-medium">
-              Photo {activeImageIndex + 1} of {galleryImages.length}
+              {galleryImages.length > 1
+                ? `Photo ${activeImageIndex + 1} of ${galleryImages.length}`
+                : "1 Photo"}
             </div>
           </div>
 
-          {/* Right Thumbnail Grid (4 cols) */}
-          <div className="lg:col-span-4 grid grid-cols-2 gap-3 h-[360px] sm:h-[480px]">
-            {galleryImages.slice(0, 4).map((imgUrl: string, idx: number) => (
-              <div
-                key={idx}
-                onClick={() => setActiveImageIndex(idx)}
-                className={`relative rounded-2xl overflow-hidden cursor-pointer bg-gray-100 border-2 transition-all shadow-sm ${
-                  activeImageIndex === idx ? "border-[#e5a83b] ring-2 ring-gold-200" : "border-transparent opacity-85 hover:opacity-100"
-                }`}
-              >
-                <Image
-                  src={imgUrl}
-                  alt={`${venue.name} preview ${idx + 1}`}
-                  fill
-                  sizes="(max-width: 1024px) 50vw, 16vw"
-                  className="object-cover"
-                />
-              </div>
-            ))}
-          </div>
+          {/* Right Thumbnail Grid (Only rendered if more than 1 photo exists) */}
+          {galleryImages.length > 1 && (
+            <div
+              className={`lg:col-span-4 grid ${
+                galleryImages.length === 2 ? "grid-cols-1" : "grid-cols-2"
+              } gap-3 h-[360px] sm:h-[480px]`}
+            >
+              {galleryImages.slice(0, 4).map((imgUrl: string, idx: number) => (
+                <div
+                  key={idx}
+                  onClick={() => setActiveImageIndex(idx)}
+                  className={`relative rounded-2xl overflow-hidden cursor-pointer bg-gray-100 border-2 transition-all shadow-sm ${
+                    activeImageIndex === idx
+                      ? "border-[#e5a83b] ring-2 ring-gold-200"
+                      : "border-transparent opacity-85 hover:opacity-100"
+                  }`}
+                >
+                  <Image
+                    src={imgUrl}
+                    alt={`${venue.name} preview ${idx + 1}`}
+                    fill
+                    sizes="(max-width: 1024px) 50vw, 16vw"
+                    className="object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

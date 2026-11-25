@@ -5,7 +5,7 @@
  * @description Hero banner section featuring grand event backdrop and multi-parameter search filter widget.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar as CalendarIcon,
@@ -15,6 +15,8 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { EVENT_CATEGORIES, ALL_VENUE_TYPES } from "@/data/mockCategories";
 
 /**
  * Hero search banner with dynamic inputs and quick popular search tags.
@@ -24,21 +26,68 @@ import {
 export const HeroSearch: React.FC = () => {
   const router = useRouter();
 
-  // Search filter local states
-  const [eventType, setEventType] = useState("Wedding");
-  const [location, setLocation] = useState("Bengaluru");
-  const [date, setDate] = useState("2026-12-12");
-  const [guests, setGuests] = useState("100");
-  const [budget, setBudget] = useState("50000-200000");
+  const todayStr = new Date().toISOString().split("T")[0];
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-  const popularSearches = [
-    "Wedding Halls",
-    "Banquet Halls",
-    "Conference Rooms",
-    "Party Halls",
-    "Lawns & Resorts",
-    "Board Rooms",
-  ];
+  // Dynamic taxonomy options (populated from backend with clean defaults)
+  const [eventTypeOptions, setEventTypeOptions] = useState<string[]>(
+    EVENT_CATEGORIES.map((c) => c.name)
+  );
+  const [locationOptions, setLocationOptions] = useState<string[]>([
+    "Bengaluru",
+    "Indiranagar",
+    "Koramangala",
+    "Whitefield",
+    "Palace Grounds",
+    "Electronic City",
+  ]);
+  const [popularSearches, setPopularSearches] = useState<string[]>(
+    ALL_VENUE_TYPES.slice(0, 6).map((v) => v.name)
+  );
+
+  // Search filter local states
+  const [eventType, setEventType] = useState("All Events");
+  const [location, setLocation] = useState("Bengaluru");
+  const [date, setDate] = useState(tomorrowStr);
+  const [guests, setGuests] = useState("any");
+  const [budget, setBudget] = useState("any");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadTaxonomies = async () => {
+      try {
+        const [catRes, locRes] = await Promise.allSettled([
+          api.categories.getAll(),
+          api.categories.getLocalities(),
+        ]);
+
+        if (!isCancelled && catRes.status === "fulfilled" && catRes.value?.data) {
+          const { eventCategories, venueTypes } = catRes.value.data;
+          if (Array.isArray(eventCategories) && eventCategories.length > 0) {
+            setEventTypeOptions(eventCategories.map((c: any) => c.name).filter(Boolean));
+          }
+          if (Array.isArray(venueTypes) && venueTypes.length > 0) {
+            setPopularSearches(venueTypes.slice(0, 6).map((v: any) => v.name).filter(Boolean));
+          }
+        }
+
+        if (!isCancelled && locRes.status === "fulfilled" && Array.isArray(locRes.value?.data)) {
+          const locs = locRes.value.data.map((l: any) => l.locality).filter(Boolean);
+          if (locs.length > 0) {
+            setLocationOptions(Array.from(new Set(["Bengaluru", ...locs])));
+          }
+        }
+      } catch {
+        // Fallback to initial defaults
+      }
+    };
+
+    loadTaxonomies();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   /**
    * Handles search form submission and navigates to the /venues page with query parameters.
@@ -47,14 +96,13 @@ export const HeroSearch: React.FC = () => {
    */
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const query = new URLSearchParams({
-      type: eventType,
-      city: location,
-      date: date,
-      guests: guests,
-      budget: budget,
-    }).toString();
-    router.push(`/venues?${query}`);
+    const params = new URLSearchParams();
+    if (eventType && eventType !== "All Events") params.set("type", eventType);
+    if (location) params.set("city", location);
+    if (date) params.set("date", date);
+    if (guests && guests !== "any") params.set("guests", guests);
+    if (budget && budget !== "any") params.set("budget", budget);
+    router.push(`/venues?${params.toString()}`);
   };
 
   /**
@@ -118,12 +166,12 @@ export const HeroSearch: React.FC = () => {
                 onChange={(e) => setEventType(e.target.value)}
                 className="bg-transparent text-sm font-semibold text-brand-950 focus:outline-none cursor-pointer mt-0.5"
               >
-                <option value="Wedding">Wedding</option>
-                <option value="Corporate Events">Corporate Event</option>
-                <option value="Birthday Parties">Birthday Party</option>
-                <option value="Get Together">Get Together</option>
-                <option value="Presentations">Presentation</option>
-                <option value="Social Events">Social Event</option>
+                <option value="All Events">All Events</option>
+                {eventTypeOptions.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -138,11 +186,11 @@ export const HeroSearch: React.FC = () => {
                 onChange={(e) => setLocation(e.target.value)}
                 className="bg-transparent text-sm font-semibold text-brand-950 focus:outline-none cursor-pointer mt-0.5"
               >
-                <option value="Bengaluru">Bengaluru</option>
-                <option value="Whitefield">Whitefield, Blr</option>
-                <option value="Indiranagar">Indiranagar, Blr</option>
-                <option value="Koramangala">Koramangala, Blr</option>
-                <option value="Electronic City">Electronic City</option>
+                {locationOptions.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc === "Bengaluru" ? "Bengaluru (All)" : `${loc}, Blr`}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -154,6 +202,7 @@ export const HeroSearch: React.FC = () => {
               <input
                 aria-label="Event Date"
                 type="date"
+                min={todayStr}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="bg-transparent text-xs font-semibold text-brand-950 focus:outline-none cursor-pointer mt-0.5"
@@ -171,6 +220,7 @@ export const HeroSearch: React.FC = () => {
                 onChange={(e) => setGuests(e.target.value)}
                 className="bg-transparent text-sm font-semibold text-brand-950 focus:outline-none cursor-pointer mt-0.5"
               >
+                <option value="any">Any Guests</option>
                 <option value="50">Up to 50</option>
                 <option value="100">100 Guests</option>
                 <option value="250">100 - 250</option>
@@ -190,6 +240,7 @@ export const HeroSearch: React.FC = () => {
                 onChange={(e) => setBudget(e.target.value)}
                 className="bg-transparent text-xs font-semibold text-brand-950 focus:outline-none cursor-pointer mt-0.5"
               >
+                <option value="any">Any Budget</option>
                 <option value="0-50000">₹0 - ₹50,000</option>
                 <option value="50000-200000">₹50,000 - ₹2,00,000</option>
                 <option value="200000-500000">₹2,00,000 - ₹5,00,000</option>

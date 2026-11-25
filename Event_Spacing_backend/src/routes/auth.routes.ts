@@ -7,6 +7,8 @@ import {
   getMe,
   updateProfile,
   changePassword,
+  getWishlist,
+  toggleWishlist,
 } from "../controllers/auth.controller";
 import { protect } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
@@ -28,6 +30,8 @@ router.post("/verify-otp", validate({ body: verifyOtpSchema }), verifyOtp);
 router.get("/me", protect, getMe);
 router.put("/profile", protect, validate({ body: updateProfileSchema }), updateProfile);
 router.put("/change-password", protect, validate({ body: changePasswordSchema }), changePassword);
+router.get("/wishlist", protect, getWishlist);
+router.post("/wishlist/:venueId", protect, toggleWishlist);
 
 export default router;
 

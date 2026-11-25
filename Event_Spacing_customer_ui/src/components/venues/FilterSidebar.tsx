@@ -5,9 +5,11 @@
  * @description Faceted left filter sidebar for narrowing venues by locality, event category, capacity, price, and amenities.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { VenueFilterState } from "@/types/venue";
+import { api } from "@/lib/api";
+import { EVENT_CATEGORIES, ALL_VENUE_TYPES } from "@/data/mockCategories";
 
 interface FilterSidebarProps {
   filters: VenueFilterState;
@@ -33,44 +35,62 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
 }) => {
   const [locationSearch, setLocationSearch] = useState("");
   const [showMoreLocations, setShowMoreLocations] = useState(false);
+  const [showMoreEventTypes, setShowMoreEventTypes] = useState(false);
   const [showMoreVenueTypes, setShowMoreVenueTypes] = useState(false);
   const [showMoreAmenities, setShowMoreAmenities] = useState(false);
 
-  const venueTypesList = [
-    { name: "Banquet Hall", count: 420 },
-    { name: "Convention Center", count: 85 },
-    { name: "Hotel", count: 195 },
-    { name: "Restaurant", count: 110 },
-    { name: "Resort", count: 140 },
-    { name: "Marriage Hall", count: 310 },
-    { name: "Community Hall", count: 90 },
-    { name: "Auditorium", count: 45 },
-    { name: "Conference Room", count: 160 },
-    { name: "Co-working / Event Space", count: 75 },
-    { name: "Outdoor Lawn", count: 215 },
-    { name: "Rooftop Space", count: 130 },
-    { name: "Farmhouse / Club", count: 105 },
-    { name: "Party Hall", count: 240 },
-    { name: "Studio", count: 50 },
-  ];
+  const [venueTypesList, setVenueTypesList] = useState<string[]>(
+    ALL_VENUE_TYPES.map((v) => v.name)
+  );
+  const [localitiesList, setLocalitiesList] = useState<string[]>([
+    "Bengaluru",
+    "Whitefield",
+    "Electronic City",
+    "Koramangala",
+    "Indiranagar",
+    "HSR Layout",
+    "Yelahanka",
+  ]);
+  const [eventTypesList, setEventTypesList] = useState<string[]>(
+    EVENT_CATEGORIES.map((c) => c.name)
+  );
 
-  const localities = [
-    { name: "Bengaluru", count: 1245 },
-    { name: "Whitefield", count: 320 },
-    { name: "Electronic City", count: 180 },
-    { name: "Koramangala", count: 210 },
-    { name: "Indiranagar", count: 160 },
-    { name: "HSR Layout", count: 145 },
-    { name: "Yelahanka", count: 95 },
-  ];
+  useEffect(() => {
+    let isCancelled = false;
 
-  const eventTypes = [
-    { name: "Wedding", count: 540 },
-    { name: "Corporate Events", count: 280 },
-    { name: "Birthday Parties", count: 220 },
-    { name: "Get Together", count: 180 },
-    { name: "Presentations", count: 140 },
-  ];
+    const loadDynamicFacets = async () => {
+      try {
+        const [catRes, locRes] = await Promise.allSettled([
+          api.categories.getAll(),
+          api.categories.getLocalities(),
+        ]);
+
+        if (!isCancelled && catRes.status === "fulfilled" && catRes.value?.data) {
+          const { eventCategories, venueTypes } = catRes.value.data;
+          if (Array.isArray(eventCategories) && eventCategories.length > 0) {
+            setEventTypesList(eventCategories.map((c: any) => c.name).filter(Boolean));
+          }
+          if (Array.isArray(venueTypes) && venueTypes.length > 0) {
+            setVenueTypesList(venueTypes.map((v: any) => v.name).filter(Boolean));
+          }
+        }
+
+        if (!isCancelled && locRes.status === "fulfilled" && Array.isArray(locRes.value?.data)) {
+          const locs = locRes.value.data.map((l: any) => l.locality).filter(Boolean);
+          if (locs.length > 0) {
+            setLocalitiesList(Array.from(new Set(["Bengaluru", ...locs])));
+          }
+        }
+      } catch {
+        // Retain initial fallback lists if backend is unreachable
+      }
+    };
+
+    loadDynamicFacets();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const capacityOptions: { label: string; value: VenueFilterState["capacityRange"] }[] = [
     { label: "Any", value: "any" },
@@ -146,13 +166,17 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
     onFilterChange({ selectedAmenities: updated });
   };
 
-  const filteredLocalities = localities.filter((loc) =>
-    loc.name.toLowerCase().includes(locationSearch.toLowerCase())
+  const filteredLocalities = localitiesList.filter((loc) =>
+    loc.toLowerCase().includes(locationSearch.toLowerCase())
   );
 
   const displayedLocalities = showMoreLocations
     ? filteredLocalities
     : filteredLocalities.slice(0, 5);
+
+  const displayedEventTypes = showMoreEventTypes
+    ? eventTypesList
+    : eventTypesList.slice(0, 5);
 
   const displayedAmenities = showMoreAmenities
     ? amenitiesList
@@ -197,34 +221,35 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
         {/* Localities checkboxes */}
         <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
           {displayedLocalities.map((loc) => {
-            const isChecked = filters.selectedLocalities.includes(loc.name);
+            const isChecked = filters.selectedLocalities.includes(loc);
             return (
               <label
-                key={loc.name}
+                key={loc}
                 className="flex items-center justify-between text-xs text-gray-700 hover:text-brand-900 cursor-pointer select-none"
               >
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    onChange={() => handleLocalityToggle(loc.name)}
+                    onChange={() => handleLocalityToggle(loc)}
                     className="w-4 h-4 rounded text-brand-800 focus:ring-brand-700 accent-brand-800"
                   />
-                  <span>{loc.name}</span>
+                  <span>{loc}</span>
                 </div>
-                <span className="text-[11px] text-gray-400">({loc.count})</span>
               </label>
             );
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowMoreLocations(!showMoreLocations)}
-          className="text-xs font-semibold text-brand-800 hover:underline"
-        >
-          {showMoreLocations ? "Show Less" : "Show More ▾"}
-        </button>
+        {filteredLocalities.length > 5 && (
+          <button
+            type="button"
+            onClick={() => setShowMoreLocations(!showMoreLocations)}
+            className="text-xs font-semibold text-brand-800 hover:underline"
+          >
+            {showMoreLocations ? "Show Less" : `+ View All ${filteredLocalities.length} Areas`}
+          </button>
+        )}
       </div>
 
       {/* 3. Event Type Filter */}
@@ -235,30 +260,39 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
         </h4>
 
         <div className="space-y-2">
-          {eventTypes.map((type) => {
-            const isChecked = filters.selectedEventTypes.includes(type.name);
+          {displayedEventTypes.map((type) => {
+            const isChecked = filters.selectedEventTypes.includes(type);
             return (
               <label
-                key={type.name}
+                key={type}
                 className="flex items-center justify-between text-xs text-gray-700 hover:text-brand-900 cursor-pointer select-none"
               >
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    onChange={() => handleEventTypeToggle(type.name)}
+                    onChange={() => handleEventTypeToggle(type)}
                     className="w-4 h-4 rounded text-brand-800 focus:ring-brand-700 accent-brand-800"
                   />
-                  <span>{type.name}</span>
+                  <span>{type}</span>
                 </div>
-                <span className="text-[11px] text-gray-400">({type.count})</span>
               </label>
             );
           })}
         </div>
+
+        {eventTypesList.length > 5 && (
+          <button
+            type="button"
+            onClick={() => setShowMoreEventTypes(!showMoreEventTypes)}
+            className="text-xs font-semibold text-brand-800 hover:underline"
+          >
+            {showMoreEventTypes ? "Show Less" : `+ View All ${eventTypesList.length} Events`}
+          </button>
+        )}
       </div>
 
-      {/* 4. Venue Type Filter (15 Master Types) */}
+      {/* 4. Venue Type Filter */}
       <div className="pt-4 border-t border-gray-100 space-y-3">
         <h4 className="text-xs font-bold uppercase tracking-wider text-gray-800 flex items-center justify-between">
           <span>Venue Type</span>
@@ -267,34 +301,35 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
 
         <div className="space-y-2">
           {(showMoreVenueTypes ? venueTypesList : venueTypesList.slice(0, 5)).map((type) => {
-            const isChecked = (filters.selectedVenueTypes || []).includes(type.name);
+            const isChecked = (filters.selectedVenueTypes || []).includes(type);
             return (
               <label
-                key={type.name}
+                key={type}
                 className="flex items-center justify-between text-xs text-gray-700 hover:text-brand-900 cursor-pointer select-none"
               >
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    onChange={() => handleVenueTypeToggle(type.name)}
+                    onChange={() => handleVenueTypeToggle(type)}
                     className="w-4 h-4 rounded text-brand-800 focus:ring-brand-700 accent-brand-800"
                   />
-                  <span>{type.name}</span>
+                  <span>{type}</span>
                 </div>
-                <span className="text-[11px] text-gray-400">({type.count})</span>
               </label>
             );
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowMoreVenueTypes(!showMoreVenueTypes)}
-          className="text-xs font-semibold text-brand-800 hover:underline inline-flex items-center gap-1"
-        >
-          <span>{showMoreVenueTypes ? "Show Less" : `+ View All ${venueTypesList.length} Types`}</span>
-        </button>
+        {venueTypesList.length > 5 && (
+          <button
+            type="button"
+            onClick={() => setShowMoreVenueTypes(!showMoreVenueTypes)}
+            className="text-xs font-semibold text-brand-800 hover:underline inline-flex items-center gap-1"
+          >
+            <span>{showMoreVenueTypes ? "Show Less" : `+ View All ${venueTypesList.length} Types`}</span>
+          </button>
+        )}
       </div>
 
       {/* 4. Guest Capacity Segmented Radios */}

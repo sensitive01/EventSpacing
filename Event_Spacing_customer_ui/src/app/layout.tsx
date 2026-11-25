@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/common/Header";
 import { Footer } from "@/components/common/Footer";
 import { CartProvider } from "@/context/CartContext";
+import { WishlistProvider } from "@/context/WishlistContext";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -41,14 +42,16 @@ export default function RootLayout({
     <html lang="en" className={`${playfair.variable} ${jakarta.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans text-gray-900 bg-[#fbf9fc] selection:bg-gold-500/30 selection:text-brand-950">
         <CartProvider>
-          {/* Global Navigation Header */}
-          <Header />
+          <WishlistProvider>
+            {/* Global Navigation Header */}
+            <Header />
 
-          {/* Main Content Area */}
-          <main className="flex-1 w-full">{children}</main>
+            {/* Main Content Area */}
+            <main className="flex-1 w-full">{children}</main>
 
-          {/* Global Master Footer */}
-          <Footer />
+            {/* Global Master Footer */}
+            <Footer />
+          </WishlistProvider>
         </CartProvider>
       </body>
     </html>

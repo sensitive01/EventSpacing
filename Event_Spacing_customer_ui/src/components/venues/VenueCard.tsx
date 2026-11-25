@@ -5,13 +5,14 @@
  * @description Standard responsive venue card used in Featured grids, Search Results, and Live Preview.
  */
 
-import React, { useState } from "react";
+import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { MapPin, Users, Heart, ArrowRight } from "lucide-react";
 import { Venue } from "@/types/venue";
 import { Badge } from "@/components/common/Badge";
 import { StarRating } from "@/components/common/StarRating";
+import { useWishlist } from "@/context/WishlistContext";
 
 interface VenueCardProps {
   venue: Venue;
@@ -40,7 +41,9 @@ export const VenueCard: React.FC<VenueCardProps> = ({
   onToggleCompare,
   isCompared = false,
 }) => {
-  const [isLiked, setIsLiked] = useState(false);
+  const { isSaved, toggleSave } = useWishlist();
+  const venueId = String(venue.id || (venue as any)._id || "");
+  const isLiked = isSaved(venueId);
 
   /**
    * Formats Indian Rupee currency with commas.
@@ -107,10 +110,10 @@ export const VenueCard: React.FC<VenueCardProps> = ({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                setIsLiked(!isLiked);
+                toggleSave(venue);
               }}
-              aria-label="Save to wishlist"
-              className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-sm active:scale-90"
+              aria-label={isLiked ? "Remove from wishlist" : "Save to wishlist"}
+              className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white transition-all shadow-sm active:scale-90 cursor-pointer"
             >
               <Heart
                 className={`w-4 h-4 transition-colors ${

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Sparkles,
   Search,
@@ -25,7 +25,6 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  MOCK_MARKETPLACE_VENDORS,
   ALL_MARKETPLACE_CATEGORIES,
   EVENT_CATEGORIES,
 } from "@/data/mockCategories";
@@ -45,14 +44,47 @@ const TIME_SLOTS: { value: TimeSlotOption; label: string; hours: string }[] = [
   { value: "Evening Slot (4 PM - 11 PM)", label: "Evening Slot", hours: "4 PM – 11 PM" },
 ];
 
-export default function VendorMarketplacePage() {
+function VendorMarketplaceContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const categoryParam = searchParams.get("category");
   const { addItem: addCartItem } = useBookingCart();
 
-  const [selectedCategory, setSelectedCategory] = useState<string>("All Categories");
+  const [marketplaceCategories, setMarketplaceCategories] = useState<string[]>(
+    ALL_MARKETPLACE_CATEGORIES.map((c) => c.name)
+  );
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    categoryParam || "All Categories"
+  );
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [vendors, setVendors] = useState<MarketplaceVendor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (categoryParam) {
+      setSelectedCategory(categoryParam);
+    }
+  }, [categoryParam]);
+
+  // Load dynamic vendor marketplace categories from /api/categories
+  useEffect(() => {
+    let isCancelled = false;
+    const loadCategories = async () => {
+      try {
+        const res = await api.categories.getAll();
+        const vCats = res?.data?.vendorCategories;
+        if (!isCancelled && Array.isArray(vCats) && vCats.length > 0) {
+          setMarketplaceCategories(vCats.map((c: any) => c.name).filter(Boolean));
+        }
+      } catch {
+        // Retain initial defaults if offline
+      }
+    };
+    loadCategories();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   // Enquiry modal state
   const [enquiringVendor, setEnquiringVendor] = useState<MarketplaceVendor | null>(null);
@@ -138,20 +170,11 @@ export default function VendorMarketplacePage() {
           return;
         }
       } catch (err) {
-        console.warn("Backend vendors API not reachable, falling back to mock:", err);
+        console.warn("Backend vendors API not reachable:", err);
       }
 
       if (!isCancelled) {
-        const filtered = MOCK_MARKETPLACE_VENDORS.filter((vendor) => {
-          const matchesCategory =
-            selectedCategory === "All Categories" || vendor.category === selectedCategory;
-          const matchesSearch =
-            vendor.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            vendor.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            vendor.locality.toLowerCase().includes(searchQuery.toLowerCase());
-          return matchesCategory && matchesSearch;
-        });
-        setVendors(filtered);
+        setVendors([]);
         setIsLoading(false);
       }
     };
@@ -368,18 +391,18 @@ export default function VendorMarketplacePage() {
           >
             All Categories
           </button>
-          {ALL_MARKETPLACE_CATEGORIES.map((category) => (
+          {marketplaceCategories.map((categoryName) => (
             <button
-              key={category.id}
+              key={categoryName}
               type="button"
-              onClick={() => setSelectedCategory(category.name)}
+              onClick={() => setSelectedCategory(categoryName)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                selectedCategory === category.name
+                selectedCategory === categoryName
                   ? "bg-brand-900 text-white shadow-sm"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-700"
               }`}
             >
-              {category.name}
+              {categoryName}
             </button>
           ))}
         </div>
@@ -934,5 +957,19 @@ export default function VendorMarketplacePage() {
         />
       )}
     </div>
+  );
+}
+
+export default function VendorMarketplacePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#fbf9fc]">
+          <Loader2 className="w-8 h-8 animate-spin text-[#380c48]" />
+        </div>
+      }
+    >
+      <VendorMarketplaceContent />
+    </Suspense>
   );
 }

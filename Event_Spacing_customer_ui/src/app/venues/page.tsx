@@ -19,7 +19,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { Venue, VenueFilterState } from "@/types/venue";
-import { EVENT_CATEGORIES } from "@/data/mockCategories";
 import { FilterSidebar } from "@/components/venues/FilterSidebar";
 import { SortHeader } from "@/components/venues/SortHeader";
 import { VenueCard } from "@/components/venues/VenueCard";
@@ -31,37 +30,86 @@ import { api } from "@/lib/api";
  *
  * @returns React JSX element
  */
+function mapGuestsToCapacityRange(guests: string | null): VenueFilterState["capacityRange"] {
+  if (!guests || guests === "any") return "any";
+  const num = parseInt(guests, 10);
+  if (isNaN(num)) return "any";
+  if (num <= 50) return "upto_50";
+  if (num <= 100) return "51_100";
+  if (num <= 300) return "101_300";
+  if (num <= 500) return "301_500";
+  return "500_plus";
+}
+
+function mapBudgetToMaxPrice(budget: string | null): number {
+  switch (budget) {
+    case "0-50000":
+      return 50000;
+    case "50000-200000":
+      return 200000;
+    case "200000-500000":
+      return 500000;
+    case "500000-plus":
+      return 2000000;
+    default:
+      return 500000;
+  }
+}
+
 function VenuesExploreContent() {
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type");
+  const cityParam = searchParams.get("city");
+  const guestsParam = searchParams.get("guests");
+  const budgetParam = searchParams.get("budget");
+  const queryParam = searchParams.get("query");
 
-  // Category pill active state
-  const [activeCategory, setActiveCategory] = useState(
-    typeParam?.toLowerCase() === "corporate" ? "Corporate Events" : "All Events"
-  );
+  const resolveEventTypesFromParam = (param: string | null): string[] => {
+    if (!param || param === "All Events") return [];
+    if (param.toLowerCase() === "corporate") return ["Corporate Events"];
+    return [param];
+  };
 
-  // Sync active category when URL query param changes
-  useEffect(() => {
-    if (typeParam?.toLowerCase() === "corporate") {
-      setActiveCategory("Corporate Events");
-    } else if (!typeParam) {
-      setActiveCategory("All Events");
-    }
-  }, [typeParam]);
+  // Free Venue (Catering Included) quick toggle state
+  const [isFreeVenueOnly, setIsFreeVenueOnly] = useState(false);
 
-  // Filter State
-  const [filters, setFilters] = useState<VenueFilterState>({
-    searchQuery: "",
+  // Filter State (initialized from URL query params when coming from Homepage Hero Search)
+  const [filters, setFilters] = useState<VenueFilterState>(() => ({
+    searchQuery: queryParam || "",
     selectedCity: "Bengaluru",
-    selectedLocalities: ["Bengaluru"],
-    selectedEventTypes: [],
+    selectedLocalities:
+      cityParam && cityParam.toLowerCase() !== "bengaluru"
+        ? [cityParam]
+        : ["Bengaluru"],
+    selectedEventTypes: resolveEventTypesFromParam(typeParam),
     selectedVenueTypes: [],
-    capacityRange: "any",
-    maxPrice: 500000,
+    capacityRange: mapGuestsToCapacityRange(guestsParam),
+    maxPrice: mapBudgetToMaxPrice(budgetParam),
     selectedAmenities: [],
     sortBy: "recommended",
     viewMode: "grid",
-  });
+  }));
+
+  // Sync filters whenever URL query params change
+  useEffect(() => {
+    if (typeParam || cityParam || guestsParam || budgetParam || queryParam) {
+      setFilters((prev) => ({
+        ...prev,
+        searchQuery: queryParam !== null ? queryParam : prev.searchQuery,
+        selectedLocalities: cityParam
+          ? cityParam.toLowerCase() === "bengaluru"
+            ? ["Bengaluru"]
+            : [cityParam]
+          : prev.selectedLocalities,
+        selectedEventTypes: typeParam
+          ? resolveEventTypesFromParam(typeParam)
+          : prev.selectedEventTypes,
+        capacityRange: guestsParam ? mapGuestsToCapacityRange(guestsParam) : prev.capacityRange,
+        maxPrice: budgetParam ? mapBudgetToMaxPrice(budgetParam) : prev.maxPrice,
+      }));
+      setCurrentPage(1);
+    }
+  }, [typeParam, cityParam, guestsParam, budgetParam, queryParam]);
 
   // Venues data state from backend
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -133,11 +181,11 @@ function VenuesExploreContent() {
         params.locality = filters.selectedLocalities.join(",");
       }
 
-      if (activeCategory === "FREE Venues") {
+      if (isFreeVenueOnly) {
         params.isFreeVenueOnly = true;
-      } else if (activeCategory !== "All Events") {
-        params.eventType = activeCategory;
-      } else if (filters.selectedEventTypes.length > 0) {
+      }
+
+      if (filters.selectedEventTypes.length > 0) {
         params.eventType = filters.selectedEventTypes.join(",");
       }
 
@@ -185,7 +233,7 @@ function VenuesExploreContent() {
     return () => {
       isCancelled = true;
     };
-  }, [filters, activeCategory, currentPage]);
+  }, [filters, isFreeVenueOnly, currentPage]);
 
   const handleToggleCompare = (venue: Venue) => {
     setComparedVenues((prev) => {
@@ -224,7 +272,7 @@ function VenuesExploreContent() {
       sortBy: "recommended",
       viewMode: "grid",
     });
-    setActiveCategory("All Events");
+    setIsFreeVenueOnly(false);
     setCurrentPage(1);
   };
 
@@ -298,57 +346,46 @@ function VenuesExploreContent() {
         </div>
       </div>
 
-      {/* 2. Top Category Pills Ribbon */}
+      {/* 2. Top Quick Filter Bar */}
       <div className="bg-white border-b border-gray-200 sticky top-[69px] z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-3 overflow-x-auto no-scrollbar flex items-center gap-2 sm:gap-3">
-          {/* All Events Button */}
-          <button
-            onClick={() => {
-              setActiveCategory("All Events");
-              setCurrentPage(1);
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeCategory === "All Events"
-                ? "bg-brand-800 text-white shadow-sm"
-                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>All Events</span>
-          </button>
-
-          {/* Special Client Feature: FREE VENUES (with Catering Plans) */}
-          <button
-            onClick={() => {
-              setActiveCategory(activeCategory === "FREE Venues" ? "All Events" : "FREE Venues");
-              setCurrentPage(1);
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-              activeCategory === "FREE Venues"
-                ? "bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md ring-2 ring-emerald-400"
-                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300"
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-gold-400 animate-ping"></span>
-            <span>FREE VENUES (Catering Included)</span>
-          </button>
-
-          {EVENT_CATEGORIES.map((cat) => (
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            {/* Special Client Feature: FREE VENUES (with Catering Plans) */}
             <button
-              key={cat.id}
+              type="button"
               onClick={() => {
-                setActiveCategory(cat.name);
+                setIsFreeVenueOnly((prev) => !prev);
                 setCurrentPage(1);
               }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeCategory === cat.name
-                  ? "bg-brand-800 text-white shadow-sm"
-                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                isFreeVenueOnly
+                  ? "bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md ring-2 ring-emerald-400"
+                  : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300"
               }`}
             >
-              <span>{cat.name}</span>
+              <span className="w-2 h-2 rounded-full bg-gold-400 animate-ping"></span>
+              <span>FREE VENUES (Catering Included)</span>
             </button>
-          ))}
+
+            {/* Quick Reset when Free Venues filter is active */}
+            {isFreeVenueOnly && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFreeVenueOnly(false);
+                  setCurrentPage(1);
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-gray-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                <span>Clear</span>
+              </button>
+            )}
+          </div>
+
+          <div className="hidden md:block text-xs text-gray-500 font-medium">
+            Showing <strong className="text-[#380c48]">{totalCount}</strong> verified venues
+          </div>
         </div>
       </div>
 

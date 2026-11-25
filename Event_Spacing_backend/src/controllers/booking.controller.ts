@@ -4,8 +4,8 @@ import { Booking } from "../models/Booking";
 import { Venue } from "../models/Venue";
 import { MarketplaceService as Vendor } from "../models/MarketplaceService";
 import { PlatformSettings } from "../models/Settings";
+import { CalendarOverride } from "../models/CalendarOverride";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
-import { venueCalendarOverrides } from "./vendorPortal.controller";
 
 export function resolveSlotConflictCondition(timeSlot: string): Record<string, unknown> {
   if (timeSlot === "Full Day (8 AM - 11 PM)") {
@@ -32,22 +32,24 @@ export function syncVenueCalendarSlot(
     guestCount: number;
   }
 ): void {
-  if (!venueCalendarOverrides[venueId]) {
-    venueCalendarOverrides[venueId] = [];
-  }
-  const existingIdx = venueCalendarOverrides[venueId].findIndex((s) => s.date === details.eventDate);
-  const slotEntry = {
-    date: details.eventDate,
-    status: "booked",
-    bookedBy: details.customerName,
-    bookingRef: details.bookingRef,
-    notes: `Confirmed: ${details.packageTitle} (${details.guestCount} guests)`,
-  };
-  if (existingIdx >= 0) {
-    venueCalendarOverrides[venueId][existingIdx] = slotEntry;
-  } else {
-    venueCalendarOverrides[venueId].push(slotEntry);
-  }
+  if (!mongoose.isValidObjectId(venueId)) return;
+
+  CalendarOverride.findOneAndUpdate(
+    { venueId, date: details.eventDate },
+    {
+      $set: {
+        venueId,
+        date: details.eventDate,
+        status: "booked",
+        bookedBy: details.customerName,
+        bookingRef: details.bookingRef,
+        notes: `Confirmed: ${details.packageTitle} (${details.guestCount} guests)`,
+      },
+    },
+    { upsert: true }
+  ).catch((err) => {
+    console.warn("Could not sync venue calendar override in MongoDB:", err);
+  });
 }
 
 export interface BookingItemInput {
@@ -197,6 +199,30 @@ export async function resolveAndValidateBookingItem(
   }
 
   const targetSpace = selectedSpaceName || venue.spaces?.[0]?.name || "Main Banquet Hall";
+
+  // Check if vendor blocked this date for maintenance in MongoDB CalendarOverride
+  const blockedOverride = await CalendarOverride.findOne({
+    venueId: venue._id,
+    date: eventDate,
+    status: "blocked",
+  });
+  if (blockedOverride) {
+    return {
+      ok: false,
+      status: 409,
+      payload: {
+        success: false,
+        message: `Slot Unavailable: "${venue.name}" is blocked for maintenance on ${eventDate}. Please choose an alternative date.`,
+        conflict: {
+          bookingRef: "MAINTENANCE-BLOCKED",
+          spaceName: targetSpace,
+          eventDate,
+          timeSlot,
+        },
+      },
+    };
+  }
+
   const existingConflict = await Booking.findOne({
     venueId: venue._id,
     selectedSpaceName: targetSpace,

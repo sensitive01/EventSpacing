@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { Venue } from "../models/Venue";
 import { Inquiry } from "../models/Inquiry";
 import { Booking } from "../models/Booking";
+import { CalendarOverride } from "../models/CalendarOverride";
 
 export const getVenues = async (
   req: Request,
@@ -380,21 +381,18 @@ export const getVenueBookedSlots = async (
       status: { $in: ["confirmed", "completed"] },
     }).select("eventDate timeSlot selectedSpaceName bookingRef -_id");
 
-    // Also include vendor-blocked maintenance dates from calendar overrides
-    let blockedSlots: any[] = [];
-    try {
-      const { venueCalendarOverrides } = await import("./vendorPortal.controller");
-      blockedSlots = (venueCalendarOverrides[String(venue._id)] || [])
-        .filter((s: any) => s.status === "blocked")
-        .map((s: any) => ({
-          eventDate: s.date,
-          timeSlot: "Full Day (8 AM - 11 PM)",
-          selectedSpaceName: "All Spaces (Maintenance)",
-          bookingRef: "MAINTENANCE-BLOCKED",
-        }));
-    } catch {
-      // Ignore if unavailable
-    }
+    // Also include vendor-blocked maintenance dates from MongoDB calendar overrides
+    const blockedOverrides = await CalendarOverride.find({
+      venueId: venue._id,
+      status: "blocked",
+    }).select("date -_id");
+
+    const blockedSlots = blockedOverrides.map((s: any) => ({
+      eventDate: s.date,
+      timeSlot: "Full Day (8 AM - 11 PM)",
+      selectedSpaceName: "All Spaces (Maintenance)",
+      bookingRef: "MAINTENANCE-BLOCKED",
+    }));
 
     const combinedSlots = [...bookings, ...blockedSlots];
 
